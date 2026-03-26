@@ -2,6 +2,8 @@
 
 > **Git, but for your AI agent skills.** 🧠
 
+![alt text](teaser.png)
+
 Tired of messy, fragmented, or conflicting agent capabilities? **skill-git** brings the power of version control directly to your AI workflows. 
 
 Track changes, seamlessly roll back bad edits, and—most importantly—**merge overlapping local skills into stronger, unified tools.** Works out-of-the-box across any AI Agent platform, including **Claude**, **OpenClaw**, **Gemini**, and **Codex**.
