@@ -1,0 +1,9 @@
+{
+  "name": "skill-git",
+  "version": "1.0.0",
+  "description": "Version control system for Claude Code agent skills — git for SKILL.md files",
+  "author": {
+    "name": "Wayne"
+  },
+  "keywords": ["skills", "version-control", "git", "agent"]
+}
