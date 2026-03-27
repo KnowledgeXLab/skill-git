@@ -33,7 +33,8 @@ Track changes, seamlessly roll back bad edits, and—most importantly—**merge 
 
 **Claude** (Recommended)
 ```bash
-claude plugin install skill-git@KnowledgeXLab
+/plugin marketplace add KnowledgeXLab/skill-git
+/plugin install skill-git@skill-git
 ```
 
 **OpenClaw**

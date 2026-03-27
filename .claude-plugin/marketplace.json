@@ -1,0 +1,23 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "skill-git",
+  "description": "Track changes, seamlessly roll back bad edits, and—most importantly—merge overlapping local skills into stronger, unified tools.",
+  "owner": {
+    "name": "KnowledgeXLab",
+    "url": "https://github.com/KnowledgeXLab"
+  },
+  "plugins": [
+    {
+      "name": "skill-git",
+      "description": "Version control system for Claude Code agent skills — git for SKILL.md files.",
+      "version": "1.0.0",
+      "author": {
+        "name": "KnowledgeXLab",
+        "url": "https://github.com/KnowledgeXLab"
+      },
+      "source": "./",
+      "category": "productivity",
+      "homepage": "https://github.com/KnowledgeXLab/skill-git"
+    }
+  ]
+}
