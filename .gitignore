@@ -16,4 +16,6 @@ node_modules/
 __pycache__/
 *.pyc
 
+# Brainstorming session files
+.superpowers/
 docs/
