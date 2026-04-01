@@ -2,12 +2,24 @@
 name: skill-git:merge
 description: Merge two or more similar skills into one stronger, more complete skill. Triggers on "merge skills", "combine skills", "consolidate skills", or after running /skill-git:scan. Usage: /skill-git:merge [skill-name skill-name ...]
 argument-hint: <skill-a> <skill-b> [<skill-c> ...] [-a <agent>]
-allowed-tools: Bash(bash *)
+allowed-tools: Bash(bash *), AskUserQuestion
 ---
 
 You are running `/skill-git:merge`. Follow these steps exactly.
 
 Merge never overwrites anything silently. Every destructive action requires explicit user confirmation before execution.
+
+## Task Tracking
+
+You MUST create a task for each item below and update each task's status as you progress (pending → in_progress → completed):
+
+1. **Resolve skills to merge** — parse arguments or select from latest scan results
+2. **Load topics and show overlap** — extract/cache rules, cluster into topics, display summary
+3. **Resolve conflicts** — present each conflicting topic and record user decisions (skip if none)
+4. **Choose name and base folder** — prompt for merged skill name and which folder to use as base
+5. **Synthesize merged SKILL.md** — generate draft, show for approval, iterate on edits
+6. **Write files** — write SKILL.md, copy non-SKILL.md files, update config.json, delete sources
+7. **Commit merged skill** — pre-flight check, confirm, run git add/commit/tag
 
 ---
 
@@ -86,14 +98,21 @@ Check staleness: for each skill in `latest.json["target_skills"]`, run:
 ```bash
 git -C <skill_path> rev-parse --short HEAD 2>/dev/null
 ```
-Compare against `latest.json["skill_versions"][<skill>]["commit_sha"]`. If any SHA has changed:
+Compare against `latest.json["skill_versions"][<skill>]["commit_sha"]`. If any SHA has changed, display:
 ```
 ⚠️  Scan results may be stale — the following skills have changed since the last scan:
     - <skill-name>  (last scanned: v1.0.1, current: v1.0.2)
-
-Use stale results anyway? (y/n)  Or run /skill-git:scan -f to refresh.
 ```
-Wait for user response. If `n`, stop.
+
+Then use the AskUserQuestion tool:
+- question: "Scan results may be stale. How would you like to proceed?"
+- header: "Action"
+- options:
+  - label: "Use stale results", description: "Continue with the existing scan results"
+  - label: "Cancel", description: "Stop — run /skill-git:scan -f to refresh first"
+- multiSelect: false
+
+If "Cancel", stop.
 
 **Select a pair:**
 
@@ -105,19 +124,13 @@ Run /skill-git:scan to re-analyze, or specify skills directly:
 ```
 Stop.
 
-```
-Last scan: <scanned_at>  (<N> skills, <M> pairs analyzed)
+Display the last scan info and insight paragraph, then use the AskUserQuestion tool:
+- question: "Select a pair to merge:"
+- header: "Pair"
+- options: build from ★★★ and ★★☆ pairs in `latest.json["pairs"]`, up to 3 pairs (label: "★★★  skill-a + skill-b  68%", description: "recommend merge" or "merge with caution"), plus a 4th option label: "Quit", description: "Exit without merging". If there are more than 3 candidate pairs, include the top 3 by overlap%.
+- multiSelect: false
 
-<insight from latest.json["insight"]>
-
-Select a pair to merge:
-  [1] ★★★  code-style + code-review     68%  → recommend merge
-  [2] ★★☆  testing + tdd                41%  → merge with caution
-
-Enter a number (or "q" to quit):
-```
-
-Wait for user input. If `q`, stop. Set `merge_targets` to the two skills of the chosen pair.
+If "Quit" is selected, stop. Otherwise set `merge_targets` to the two skills of the chosen pair.
 
 ---
 
@@ -156,31 +169,23 @@ If there are 0 conflicting topics, note: `No conflicts — ready to synthesize.`
 
 Skip this step entirely if there are 0 conflicting topics.
 
-For each conflicting topic, present it and wait for user response before moving to the next:
+For each conflicting topic, display the separator and `Why:` explanation (mandatory — never omit it), then wait for user response before moving to the next.
 
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Conflict 1 of N: <topic label>
+The `Why:` line should explain the semantic difference in plain language (e.g. "skill-a gates changes with a scoring threshold; skill-b promotes based on recurrence count — different decision frameworks for when to act on a learning").
 
-  Why: <one-sentence plain-language explanation of why these rules conflict
-       and what practical difference choosing one over the other makes>
-
-  [1] <skill-a>:<line>   "<rule text from skill-a>"
-  [2] <skill-b>:<line>   "<rule text from skill-b>"
-  [3] Write a custom rule
-  [4] Keep both (include both, mark as TODO)
-
-Your choice:
-```
-
-The `Why:` line is mandatory — never omit it. It should explain the semantic difference in plain language (e.g. "skill-a gates changes with a scoring threshold; skill-b promotes based on recurrence count — different decision frameworks for when to act on a learning").
-
-If the topic has entries from 3+ skills, list all entries as `[1]`, `[2]`, `[3]` … with custom and keep-both as the last two options.
+Use the AskUserQuestion tool for each conflict:
+- question: "Conflict <N> of <total>: <topic label>. Why: <one-sentence explanation of the conflict>. Which rule to keep?"
+- header: "Conflict <N>/<total>"
+- options: build dynamically from the conflicting entries, up to 2 skill entries (label: "Keep <skill-name> rule", description: "<skill>:<line>  \"<rule text>\""). Always append:
+  - label: "Write custom rule", description: "Enter replacement text in Other"
+  - label: "Keep both", description: "Include both entries marked with <!-- TODO: resolve conflict -->"
+- multiSelect: false
+(For 3+ skill entries, include up to 2 in the options and note the others in descriptions; the user can use Other to specify.)
 
 Record each decision:
-- `1` / `2` / `3` … → keep that entry verbatim
-- Custom → prompt `Enter your custom rule:` and record the text
-- Keep both → mark `keep_both: true`; all entries will be included with `<!-- TODO: resolve conflict -->` between them
+- "Keep <skill> rule" → keep that entry verbatim
+- "Write custom rule" → use the Other text as the custom rule
+- "Keep both" → mark `keep_both: true`; all entries will be included with `<!-- TODO: resolve conflict -->` between them
 
 After all conflicts are resolved:
 ```
@@ -194,28 +199,33 @@ All conflicts resolved. ✅
 Ask both questions before proceeding.
 
 **5a. Name:**
-```
-Name for the merged skill?
-Suggestion: <short name derived from shared topic labels>
-(press Enter to accept, or type a new name)
-```
 
-If the name already exists as a folder under `<global_base>/skills/`, warn:
-```
-⚠️  "<name>" already exists.
-  [1] Overwrite <name>
-  [2] Enter a different name
-```
+Use the AskUserQuestion tool:
+- question: "Name for the merged skill? Suggested: '<short name derived from shared topic labels>'"
+- header: "Skill name"
+- options:
+  - label: "Accept suggestion", description: "Use '<suggestion>' as the merged skill name"
+  - label: "Enter custom name", description: "Type your preferred name in Other"
+- multiSelect: false
+
+If the name already exists as a folder under `<global_base>/skills/`, warn the user and use the AskUserQuestion tool:
+- question: "'<name>' already exists as a skill folder. How to proceed?"
+- header: "Name clash"
+- options:
+  - label: "Overwrite <name>", description: "Replace the existing skill folder with the merged result"
+  - label: "Enter a different name", description: "Provide a new name in Other"
+- multiSelect: false
 
 **5b. Base folder:**
-```
-Which folder to use as the base?
-  [1] <skill-a>   <path>  (reuses existing git history)
-  [2] <skill-b>   <path>  (reuses existing git history)
-  [3] New folder: <global_base>/skills/<merged-name>/
 
-Your choice:
-```
+Use the AskUserQuestion tool:
+- question: "Which folder to use as the base for the merged skill?"
+- header: "Base folder"
+- options:
+  - label: "<skill-a>", description: "<path>  (reuses existing git history)"
+  - label: "<skill-b>", description: "<path>  (reuses existing git history)"
+  - label: "New folder", description: "<global_base>/skills/<merged-name>/  (fresh git history)"
+- multiSelect: false
 
 Choosing `[1]` or `[2]` writes the merged SKILL.md into that folder, preserving its git history. The folder name stays unchanged; only the `name` field in frontmatter updates to `<merged-name>`.
 
@@ -265,15 +275,18 @@ Draft: <merged-name>
 
 <full SKILL.md content>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Approve this draft?
-  [y] Yes, write it
-  [e] Edit — tell me what to change
-  [q] Quit without saving
 ```
 
-If `[e]`: apply revision instructions, regenerate, show again. Repeat until `[y]` or `[q]`.
-If `[q]`: stop. No files are written. config.json is unchanged.
+Then use the AskUserQuestion tool:
+- question: "Approve this draft for '<merged-name>'?"
+- header: "Draft"
+- options:
+  - label: "Yes, write it", description: "Write this SKILL.md and proceed to file operations"
+  - label: "Edit draft", description: "Describe what to change in Other — draft will be regenerated"
+  - label: "Quit", description: "Exit without saving — no files will be written"
+- multiSelect: false
+
+If "Edit draft": apply the Other revision instructions, regenerate the draft, display again, and repeat. If "Quit": stop. No files are written. config.json is unchanged.
 
 ---
 
@@ -347,66 +360,52 @@ All files already in the base folder are preserved automatically. Only files fro
 
 For each non-base source skill, list its non-SKILL.md contents. If any exist:
 
-```
-Files in <other-skill> (not in base):
-  scripts/run.sh
-  assets/LEARNINGS.md
-  hooks/handler.js
-  references/examples.md
-  ...
+Display the list of files to copy from the other skill folder, then use the AskUserQuestion tool:
+- question: "Copy these files from <other-skill> into <merged-skill-path>/?"
+- header: "Copy files"
+- options:
+  - label: "Yes, copy files (Recommended)", description: "Files that conflict with the base will be shown for your decision"
+  - label: "No, skip", description: "Do not copy any files from <other-skill>"
+- multiSelect: false
 
-These will be copied into <merged-skill-path>/. Files that already exist in the base will be shown for your decision.
-Copy them now? (y/n)
-```
-
-Default is `y`. If `y`:
+Default is "Yes". If "Yes, copy files":
 - For each file/directory unique to the other skill: copy preserving structure
   ```bash
   cp -r <other-skill-path>/<item> <merged-skill-path>/
   ```
-- For each file that already exists in the base folder: show a conflict prompt:
-  ```
-  ⚠️  Conflict: <filename> exists in both <base-skill> and <other-skill>
-    [1] Keep base (<base-skill> version)
-    [2] Use other (<other-skill> version)
-    [3] Keep both: rename other to <filename>.<other-skill>
-  ```
-  Wait for user choice and act accordingly.
+- For each file that already exists in the base folder: use the AskUserQuestion tool:
+  - question: "Conflict: '<filename>' exists in both <base-skill> and <other-skill>. Which version to keep?"
+  - header: "File clash"
+  - options:
+    - label: "Keep base version", description: "Keep the <base-skill> copy, discard <other-skill>'s version"
+    - label: "Use other version", description: "Replace with the <other-skill> copy"
+    - label: "Keep both", description: "Rename <other-skill>'s copy to <filename>.<other-skill>"
+  - multiSelect: false
 
 **Case B — base is a new folder ([3]):**
 
-Both source skills' files must be copied. Enumerate all non-SKILL.md, non-.git contents from both:
+Both source skills' files must be copied. Enumerate all non-SKILL.md, non-.git contents from both and display the file list, then use the AskUserQuestion tool:
+- question: "Copy all files into <merged-skill-path>/?"
+- header: "Copy files"
+- options:
+  - label: "Yes, copy files (Recommended)", description: "Files that exist in both sources will be shown for your decision"
+  - label: "No, skip", description: "Do not copy any non-SKILL.md files"
+- multiSelect: false
 
-```
-Files to copy into <merged-skill-path>/:
-
-  From <skill-a>:
-    scripts/run.sh
-    assets/LEARNINGS.md
-    .gitignore
-
-  From <skill-b>:
-    hooks/handler.js
-    references/examples.md
-    scripts/run.sh          ← also exists in <skill-a>
-
-Copy all files now? (y/n)
-```
-
-Default is `y`. If `y`:
+Default is "Yes". If "Yes, copy files":
 1. Copy all files from skill-a first:
    ```bash
    find <skill-a-path> -not -path '*/.git/*' -not -name '.git' -not -name 'SKILL.md' \
      -mindepth 1 -maxdepth 1 | xargs -I{} cp -r {} <merged-skill-path>/
    ```
-2. For each item from skill-b: if no conflict, copy directly. If a file or directory already exists from skill-a, show conflict prompt:
-   ```
-   ⚠️  Conflict: <filename> exists in both <skill-a> and <skill-b>
-     [1] Keep <skill-a> version
-     [2] Use <skill-b> version
-     [3] Keep both: rename <skill-b> copy to <filename>.<skill-b>
-   ```
-   Wait for user choice and act accordingly.
+2. For each item from skill-b: if no conflict, copy directly. If a file or directory already exists from skill-a, use the AskUserQuestion tool:
+   - question: "Conflict: '<filename>' exists in both <skill-a> and <skill-b>. Which version to keep?"
+   - header: "File clash"
+   - options:
+     - label: "Keep <skill-a> version", description: "Use the copy from <skill-a>"
+     - label: "Use <skill-b> version", description: "Replace with the copy from <skill-b>"
+     - label: "Keep both", description: "Rename the <skill-b> copy to <filename>.<skill-b>"
+   - multiSelect: false
 
 If no non-SKILL.md files exist in any source skill, skip this sub-step silently.
 
@@ -420,33 +419,33 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/sg-config-add.sh" "<agent>" "<merged-name>" 
 
 **7d. Delete source skill folders:**
 
-If base was `[3]` (new folder), both source folders still exist. Ask:
-```
-Delete source skills now that they have been merged?
-  <skill-a>  <path>
-  <skill-b>  <path>
+If base was `[3]` (new folder), both source folders still exist. Use the AskUserQuestion tool:
+- question: "Delete source skills now that they have been merged into '<merged-name>'?"
+- header: "Del sources"
+- options:
+  - label: "Yes, delete both", description: "Remove <skill-a> (<path>) and <skill-b> (<path>) from disk and config"
+  - label: "No, keep them", description: "Leave source folders in place — you can delete them manually later"
+- multiSelect: false
 
-  [y] Yes, delete both
-  [n] No, keep them (you can delete manually later)
-```
-
-If base was `[1]` or `[2]`, only the other source still exists. Ask:
-```
-Delete <other-skill> now that it has been merged into <merged-name>?
-  <other-skill>  <path>
-
-  [y] Yes, delete it
-  [n] No, keep it
-```
+If base was `[1]` or `[2]`, only the other source still exists. Use the AskUserQuestion tool:
+- question: "Delete <other-skill> now that it has been merged into '<merged-name>'?"
+- header: "Del source"
+- options:
+  - label: "Yes, delete it", description: "Remove <other-skill> (<path>) from disk and config"
+  - label: "No, keep it", description: "Leave <other-skill> in place — you can delete it manually later"
+- multiSelect: false
 
 Before deleting any folder, check for uncommitted changes:
 ```bash
 git -C <skill-path> status --porcelain
 ```
-If output is non-empty, warn:
-```
-⚠️  <skill-name> has uncommitted changes. Delete anyway? (y/n)
-```
+If output is non-empty, use the AskUserQuestion tool:
+- question: "<skill-name> has uncommitted changes. Delete anyway?"
+- header: "Confirm"
+- options:
+  - label: "Yes, delete anyway", description: "Uncommitted changes will be permanently lost"
+  - label: "No, cancel delete", description: "Skip deleting this skill folder"
+- multiSelect: false
 
 If confirmed, delete and remove from config.json:
 ```bash
@@ -472,7 +471,9 @@ Commit the merged skill using the same logic as `commit.md` Steps 4–5:
    - `config.json` contains an entry for `<merged-name>`
    - Source skill folders are in expected state (deleted or still present per user choice)
 
-   Then show the confirmation. **This prompt is mandatory and must not be skipped.**
+   Then display the pre-flight summary and use the AskUserQuestion tool. **This prompt is mandatory and must not be skipped.**
+
+   Display:
    ```
    ⚠️  This will create a permanent git commit and version tag.
 
@@ -485,9 +486,15 @@ Commit the merged skill using the same logic as `commit.md` Steps 4–5:
      Ready to commit:
        <merged-name>  <current> → <new-version>
        "merge <skill-a> and <skill-b> into <merged-name>"
-
-   Proceed? (y/n)
    ```
+
+   Then use the AskUserQuestion tool:
+   - question: "Proceed with creating the git commit and version tag for '<merged-name>'?"
+   - header: "Commit"
+   - options:
+     - label: "Yes, proceed", description: "Create commit and tag <new-version> (permanent)"
+     - label: "No, cancel", description: "Exit without committing"
+   - multiSelect: false
 
    If any pre-flight item shows ❌, do not commit. Report what's missing and stop.
 

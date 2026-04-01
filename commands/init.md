@@ -2,9 +2,20 @@
 name: skill-git:init
 description: Initialize version tracking for your skills. Creates an independent git repo inside each skill folder and tags it v1.0.0. Run once before using any other skill-git commands. Supports -a <agent> (claude/gemini/codex/openclaw) and --project flags.
 argument-hint: [-a <agent>] [--project]
+allowed-tools: Bash(bash *), AskUserQuestion
 ---
 
 You are running `/skill-git:init`. Follow these steps in order.
+\
+
+## Task Tracking
+
+You MUST create a task for each item below and update each task's status as you progress (pending → in_progress → completed):
+
+1. **Resolve agent** — detect or prompt for the target agent (claude, gemini, codex, openclaw)
+2. **Explain what will happen** — summarize the init steps to the user before executing
+3. **Verify git is installed** — check `git --version`
+4. **Run initialization** — execute `sg-init.sh` and display the full output
 
 
 ## Step 1 — Resolve agent
@@ -48,18 +59,18 @@ default_agent: gemini
 If found, set `agent` from that value. Note: `(agent from config: <agent>)`
 
 **Step C — Prompt user (if Step B also fails):**
-```
-Could not detect the current CLI tool automatically.
-Which agent are you initializing skills for?
 
-  [1] claude    (~/.claude/skills/)
-  [2] gemini    (~/.gemini/skills/)
-  [3] codex     (~/.codex/skills/)
-  [4] openclaw  (~/.openclaw/skills/ + ~/.openclaw/workspace/skills/)
+Tell the user that the CLI tool could not be detected automatically, then use the AskUserQuestion tool:
+- question: "Which agent are you initializing skills for?"
+- header: "Agent"
+- options:
+  - label: "claude", description: "~/.claude/skills/"
+  - label: "gemini", description: "~/.gemini/skills/"
+  - label: "codex", description: "~/.codex/skills/"
+  - label: "openclaw", description: "~/.openclaw/skills/ + ~/.openclaw/workspace/skills/"
+- multiSelect: false
 
-Enter a number:
-```
-Wait for user response and set `agent` accordingly.
+Set `agent` from the user's response.
 
 ## Step 2 — Explain what will happen
 

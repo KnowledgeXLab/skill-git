@@ -2,12 +2,22 @@
 name: skill-git:scan
 description: Scan registered skills for semantic overlap and get merge suggestions. Triggers on "scan my skills", "find overlapping skills", "which skills can I merge", or before running /skill-git:merge.
 argument-hint: [<skill-name> ...] [-a <agent>] [-f]
-allowed-tools: Bash(bash *)
+allowed-tools: Bash(bash *), AskUserQuestion
 ---
 
 You are running `/skill-git:scan`. Follow these steps exactly.
 
 All output shown to the user must be in English.
+
+## Task Tracking
+
+You MUST create a task for each item below and update each task's status as you progress (pending → in_progress → completed):
+
+1. **Resolve target skills** — validate requested skills or use all registered skills
+2. **Pre-filter by description** — group skills by domain similarity, skip unrelated pairs
+3. **Extract rules (Phase 1)** — load from cache or dispatch subagents to extract rules per skill
+4. **Cluster and analyze pairs (Phase 2)** — pool rules into topics, derive overlap metrics per pair
+5. **Save results and output report** — persist to `latest.json` and display merge suggestions
 
 ---
 
@@ -98,23 +108,88 @@ All skill pairs are in distinct domains — no merges to analyze.
 ```
 Then skip directly to Step 6 (save empty result) and Step 7 (no actionable pairs report).
 
-**3d. Display pre-filter summary** (printed once, before Step 4):
+**3d. Form similarity groups.**
+
+From the `include` pairs, form **similarity groups**: sets of skills where every pair within the group was marked `include`. A skill may appear in more than one group.
+
+Algorithm:
+1. Start with each `include` pair as a candidate group of 2.
+2. For each candidate group, attempt to add another skill S: add S only if S was marked `include` with **every** existing member of the group.
+3. Repeat until no skill can be added to any group.
+4. Remove any group that is a strict subset of a larger group — keep only maximal groups.
+
+Skills that appear in zero `include` pairs are isolated — they will not enter Phase 1 or Phase 2.
+
+Store the resulting groups for Steps 4 and 5. If a skill appears in multiple groups, its rules are extracted once in Step 4 and analyzed independently within each group in Step 5.
+
+**3e. Display pre-filter summary** (printed once, before Step 4):
+
 ```
-Pre-filtering N skills by description... M pairs to analyze (K pairs skipped as unrelated)
+Pre-filtering N skills by description...
+Groups: [code-style, code-review, linting] · [tdd, testing]
+        humanizer → no similar skills (skipped)
+K pairs skipped as unrelated
 ```
+
+If all skills are isolated:
+```
+All skills are in distinct domains — no merges to analyze.
+```
+Then skip to Step 6 (save empty result) and Step 7 (no actionable pairs report).
 
 ---
 
-## Step 4 — Phase 1: Parallel Rule Extraction
+## Step 4 — Phase 1: Rule Extraction
 
-If `force = true`, display: `Scanning N skills... (force refresh, cache ignored)`
-Otherwise display: `Scanning N skills...`
+### 4a. Bulk Cache Pre-check
 
-This line is printed once before subagents are launched; do not repeat it in the final report.
+If `force = true`, mark all target skills as **cache-miss** and jump to 4b.
 
-Divide the target skill list into batches of at most 10. Process batches serially; within each batch, spawn one subagent per skill in parallel. Wait for all subagents in a batch to complete before starting the next batch.
+Otherwise, the main agent checks every skill's cache directly — **do not spawn subagents for this**. Run the following in one pass:
 
-**Each subagent receives:** `skill_name`, `skill_path` (the skill folder path, e.g. `~/.claude/skills/humanizer/`), `agent`, `force`
+1. For each skill in the target set, read `~/.skill-git/cache/<agent>/rules/<skill_name>.json` (use the Read tool; ignore missing files).
+
+2. For each skill where a cache file was found, get its current commit SHA in a single batch shell call:
+   ```bash
+   # one git call per skill with a cache file
+   git -C <skill_path> rev-parse --short HEAD 2>/dev/null || echo "NO_GIT"
+   ```
+
+3. Classify each skill:
+   - **Cache hit (git skill)**: cache file exists AND current SHA matches `commit_sha` in the cache file.
+   - **Cache hit (untracked skill)**: cache file exists, skill has no git repo, and no file in `<skill_path>` has an mtime newer than `extracted_at`.
+     ```bash
+     find <skill_path> -maxdepth 2 -newer <extracted_at_as_reference_file> | head -1
+     ```
+     If this finds nothing → cache hit.
+   - **Cache miss**: cache file missing, SHA mismatch, or newer files found.
+
+Store the full cache file content for each cache-hit skill (rules already loaded in step 1).
+
+### 4b. Display Progress
+
+Let `C` = number of cache hits, `E` = number of cache misses (= target set size − C).
+
+Print exactly one progress line before any subagent is launched:
+
+```
+Scanning N skills... (C from cache, E to extract)
+```
+
+Special cases:
+- All cache hits (`E = 0`): `Scanning N skills... (all from cache)`
+- All cache misses, first run (no cache files existed): `Scanning N skills...`
+- `force = true`: `Scanning N skills... (force refresh, cache ignored)`
+
+Do not repeat this line in the final report.
+
+### 4c. Dispatch Subagents (cache-miss skills only)
+
+If `E = 0`, skip this section entirely — no subagents needed.
+
+Divide the **cache-miss** skill list into batches of at most 10. Process batches serially; within each batch, spawn one subagent per skill in parallel. Wait for all subagents in a batch to complete before starting the next batch.
+
+**Each subagent receives:** `skill_name`, `skill_path` (e.g. `~/.claude/skills/humanizer/`), `agent`
 
 **Each subagent does:**
 
@@ -123,23 +198,15 @@ Divide the target skill list into batches of at most 10. Process batches seriall
    { "name": "<skill_name>", "error": "path not found" }
    ```
 
-2. **Cache check** (skip entirely if `force = true`):
-   - Read `~/.skill-git/cache/<agent>/rules/<skill_name>.json`
-   - If the file exists:
-     - Run `git -C <skill_path> rev-parse --short HEAD 2>/dev/null`
-     - If the skill has a git repo and current SHA equals `commit_sha` in cache → return the cached result immediately (add `"from_cache": true`)
-     - If no git repo: compare `stat`-based mtime of all files in `<skill_path>` against `extracted_at` — if no file is newer, return cached result
-   - If cache miss or `force = true`: proceed to extraction
-
-3. List all `.md` files inside `<skill_path>/`:
+2. List all `.md` files inside `<skill_path>/`:
    - `SKILL.md` (primary, read first if present)
    - Other `*.md` files (e.g. `examples.md`, `context.md`)
 
    Script files (`.sh`, `.py`, `.js`, etc.) are intentionally excluded — scripts are implementation, not behavioral specification.
 
-4. Read all collected files.
+3. Read all collected files.
 
-5. Extract rules from all collected files. Apply the rule extraction methodology directly — a rule is any of:
+4. Extract rules from all collected files. A rule is any of:
    - Explicit behavioral directive ("always do X", "never do Y")
    - Format or style requirement ("use 4-space indent")
    - Process constraint ("run tests before commit")
@@ -150,7 +217,7 @@ Divide the target skill list into batches of at most 10. Process batches seriall
    - `line`: line number in that file
    - `text`: verbatim excerpt (do not rephrase)
 
-6. Write the extracted rules to cache:
+5. Write the extracted rules to cache:
    - Get current git SHA: `git -C <skill_path> rev-parse --short HEAD 2>/dev/null` (null if no git repo)
    - Get current git tag: `git -C <skill_path> describe --tags --abbrev=0 2>/dev/null` (null if no tags)
    - Write `~/.skill-git/cache/<agent>/rules/<skill_name>.json`:
@@ -165,11 +232,10 @@ Divide the target skill list into batches of at most 10. Process batches seriall
      }
      ```
 
-7. Return:
+6. Return:
    ```json
    {
      "name": "code-style",
-     "from_cache": false,
      "rules": [
        { "file": "SKILL.md",    "line": 12, "text": "always add type annotations to function signatures" },
        { "file": "examples.md", "line": 3,  "text": "use descriptive variable names, avoid x/y/z" }
@@ -182,19 +248,17 @@ Divide the target skill list into batches of at most 10. Process batches seriall
 - Folder exists but is completely empty or has no readable files → return `{ "name": "<name>", "error": "empty skill folder" }`
 - `SKILL.md` not found but other files exist → still extract from available files; note `(no SKILL.md)` in report.
 
-**After all batches complete:**
+### 4d. Assemble Full Rule Set
 
-Count how many skills returned `"from_cache": true` vs `false`. If `force = false` and any skills were cached, update the progress line (or print a follow-up):
-```
-Scanning N skills... (X from cache, Y re-extracted)
-```
+Combine rules from both sources:
+- **Cache-hit skills**: use the rules already loaded from their cache files in step 4a.
+- **Cache-miss skills**: use the rules returned by subagents in step 4c.
 
-Collect all subagents that returned an error. For each:
+Handle errors from subagents:
 - `path not found`: auto-remove from config.json and display canonical warning:
   ```bash
   bash "${CLAUDE_PLUGIN_ROOT}/scripts/sg-handle-missing.sh" "<agent>" "<skill_name>" "<path>"
   ```
-  Note: `<agent>` is the AGENT value from the prelude output (passed to the subagent). `<path>` is the skill folder path that was passed to the subagent.
 - `empty skill folder` or other errors: skip this skill in Phase 2; note in report as `(skipped: empty skill folder)`.
 
 Remove all errored skills from the analyzable set. If the remaining analyzable set has fewer than 2 skills, display:
@@ -205,13 +269,15 @@ Then stop.
 
 ---
 
-## Step 5 — Phase 2: Global Clustering + Pairwise Derivation
+## Step 5 — Phase 2: Per-Group Clustering + Pairwise Derivation
 
-Take all rule lists from Phase 1 and run two sub-steps. No additional subagents needed.
+Process each group from Step 3 independently. Groups do not share topics or analysis state. Run up to 5 groups in parallel; wait for all groups to complete before assembling the final result.
 
-**5a. Global Rule Clustering**
+For each group, run the two sub-steps below. Pass the group's skills and their rules (loaded in Step 4) to a subagent, or run inline if the total rule count across all groups is small (≤ 60 rules).
 
-Pool **all** rules from **all** skills into one collection. Group them into **rule topics** by semantic similarity.
+**5a. Within-group Global Rule Clustering**
+
+Pool **all** rules from **all** skills in this group. Group them into **rule topics** by semantic similarity.
 
 A rule topic groups rules that address the same behavior or constraint, regardless of skill or wording.
 
@@ -233,13 +299,13 @@ After clustering, check every topic with entries from more than one skill:
 
 Mark conflicted topics with `"conflicted": true` and `"conflict_type": "direct"|"semantic"`. Scope overlaps (compatible, one more specific) are **not** conflicts.
 
-**5b. Pairwise Metric Derivation**
+**5b. Within-group Pairwise Metric Derivation**
 
-For each pair `(skill_A, skill_B)`, derive all metrics from the topic list — no re-scanning needed:
+For each pair `(skill_A, skill_B)` within this group, derive all metrics from the group's topic list — no re-scanning needed:
 
 - **`shared_topics`**: topics with entries from both skill_A and skill_B
 - **`conflict_topics`**: shared topics where `conflicted: true` and the conflicting entries span both skills
-- **`unmatched`**: topics with entries from skill_A **or** skill_B but not both (`skill` field identifies the source)
+- **`unmatched`**: topics with entries from skill_A **or** skill_B but not both
 - **`A_topic_count`**: distinct topics containing at least one entry from skill_A
 - **`B_topic_count`**: same for skill_B
 
@@ -264,14 +330,22 @@ Run Step 7 (Output Report) **first** to generate the insight paragraph, then per
 {
   "scanned_at": "<ISO 8601 UTC timestamp>",
   "agent": "<agent>",
-  "target_skills": ["code-style", "code-review", "humanizer"],
+  "target_skills": ["code-style", "code-review", "linting", "tdd", "testing"],
   "skill_versions": {
     "code-style":  { "version": "v1.0.2", "commit_sha": "abc123de" },
-    "code-review": { "version": "v1.1.0", "commit_sha": "ff8821bc" }
+    "code-review": { "version": "v1.1.0", "commit_sha": "ff8821bc" },
+    "linting":     { "version": "v1.0.0", "commit_sha": "aa9900bb" },
+    "tdd":         { "version": "v2.0.0", "commit_sha": "cd3412ef" },
+    "testing":     { "version": "v1.3.0", "commit_sha": "78ab12cd" }
   },
+  "groups": [
+    { "id": 1, "skills": ["code-style", "code-review", "linting"] },
+    { "id": 2, "skills": ["tdd", "testing"] }
+  ],
   "topics": [
     {
       "id": 1,
+      "group_id": 1,
       "label": "type annotations",
       "conflicted": false,
       "entries": [
@@ -281,6 +355,7 @@ Run Step 7 (Output Report) **first** to generate the insight paragraph, then per
     },
     {
       "id": 2,
+      "group_id": 1,
       "label": "quote style",
       "conflicted": true,
       "conflict_type": "direct",
@@ -291,30 +366,45 @@ Run Step 7 (Output Report) **first** to generate the insight paragraph, then per
     },
     {
       "id": 3,
-      "label": "indentation",
+      "group_id": 2,
+      "label": "test-first",
       "conflicted": false,
       "entries": [
-        { "skill": "code-style", "file": "SKILL.md", "line": 5, "text": "use 2-space indentation" }
+        { "skill": "tdd",     "file": "SKILL.md", "line": 2, "text": "no production code without a failing test" },
+        { "skill": "testing", "file": "SKILL.md", "line": 5, "text": "write tests before implementation" }
       ]
     }
   ],
   "pairs": [
     {
+      "group_id": 1,
       "skill_a": "code-style",
       "skill_b": "code-review",
       "overlap_pct": 68,
       "rating": "3star",
       "shared_topic_ids": [1],
       "conflict_topic_ids": [2],
-      "unmatched_topic_ids": [3]
+      "unmatched_topic_ids": []
+    },
+    {
+      "group_id": 2,
+      "skill_a": "tdd",
+      "skill_b": "testing",
+      "overlap_pct": 41,
+      "rating": "2star",
+      "shared_topic_ids": [3],
+      "conflict_topic_ids": [],
+      "unmatched_topic_ids": []
     }
   ],
   "summary": {
-    "total_skills": 3,
-    "total_pairs_analyzed": 3,
-    "pairs_prefilt_skipped": 0,
+    "total_skills": 5,
+    "total_groups": 2,
+    "skills_isolated": 0,
+    "total_pairs_analyzed": 4,
+    "pairs_prefilt_skipped": 2,
     "recommended": 1,
-    "optional": 0,
+    "optional": 1,
     "below_threshold": 2
   },
   "insight": "<the insight paragraph generated in Step 7>"
@@ -322,16 +412,21 @@ Run Step 7 (Output Report) **first** to generate the insight paragraph, then per
 ```
 
 Field notes:
-- `topics`: global topic list defined once; pairs reference by id — no rule text duplication
-- `topics[].conflicted`: `true` when entries from different skills contradict each other; `conflict_type` is `"direct"` or `"semantic"`
-- `pairs[].shared_topic_ids`: topics containing entries from both skills
-- `pairs[].conflict_topic_ids`: subset of `shared_topic_ids` where `conflicted: true` and conflict spans both skills
-- `pairs[].unmatched_topic_ids`: topics with entries from only one of the two skills
-- `insight`: the natural language paragraph generated in Step 7 — write it to the result object **after** generating it, before saving to disk
-- `rating`: `"3star"` / `"2star"` / `"1star"` (avoid Unicode star characters in JSON)
-- `skill_versions`: collect from each subagent's cache write result (version + commit_sha)
-- `summary.total_pairs_analyzed`: pairs that passed the description pre-filter and were fully analyzed
-- `summary.pairs_prefilt_skipped`: pairs skipped in Step 3 as unrelated; `0` when `requested_skills` was non-empty
+- `groups`: list of similarity groups formed in Step 3. Each group has a unique `id` and the list of skills analyzed together.
+- `topics[].group_id`: which group this topic was produced from. Topics from different groups are independent — they were clustered separately.
+- `pairs[].group_id`: which group this pair belongs to. A pair only appears in the group where both skills are members.
+- `topics`: flat list across all groups; pairs reference by id — no rule text duplication.
+- `topics[].conflicted`: `true` when entries from different skills contradict each other; `conflict_type` is `"direct"` or `"semantic"`.
+- `pairs[].shared_topic_ids`: topics (within the same group) containing entries from both skills.
+- `pairs[].conflict_topic_ids`: subset of `shared_topic_ids` where `conflicted: true` and conflict spans both skills.
+- `pairs[].unmatched_topic_ids`: topics with entries from only one of the two skills.
+- `insight`: the natural language paragraph generated in Step 7 — write it after generating, before saving.
+- `rating`: `"3star"` / `"2star"` / `"1star"` (avoid Unicode star characters in JSON).
+- `skill_versions`: collect from each skill's cache write result (version + commit_sha).
+- `summary.total_groups`: number of similarity groups formed.
+- `summary.skills_isolated`: skills that had no similar peers and were excluded from all groups.
+- `summary.total_pairs_analyzed`: pairs that were fully analyzed across all groups.
+- `summary.pairs_prefilt_skipped`: pairs skipped in Step 3 as unrelated; `0` when `requested_skills` was non-empty.
 
 **6b. Ensure directories exist:**
 ```bash
@@ -368,11 +463,11 @@ ls -1t ~/.skill-git/cache/<agent>/scans/history/*.json \
 
 Format and display the final report. The `Scanning N skills...` line was already printed in Step 4 and is **not** repeated here.
 
-Render each pair by looking up topic details from the `topics` list using the id arrays in each pair.
+Render each pair by looking up topic details from the `topics` list using the id arrays in each pair. All pairs from all groups are pooled and sorted together by star rating then overlap%.
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Merge suggestions (N skills, M pairs analyzed):
+Merge suggestions (N skills in K groups, M pairs analyzed):
 
   ★★★  code-style + code-review     68%  → recommend merge
 
@@ -421,6 +516,7 @@ Merge suggestions (N skills, M pairs analyzed):
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Summary: X recommended, Y optional, Z pairs below threshold (no action needed)
+         K groups · J skills isolated (no similar peers found)
 
 <insight paragraph>
 
@@ -428,6 +524,8 @@ Results saved to ~/.skill-git/cache/<agent>/scans/latest.json
   → Run /skill-git:merge to start the merge workflow.
   (Rules extracted from .md files only — script files excluded)
 ```
+
+If no isolated skills exist, omit the `· J skills isolated` clause entirely.
 
 **`<insight paragraph>` rules:**
 
@@ -482,12 +580,13 @@ Examples:
 **No actionable pairs (and no conflicts):**
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Merge suggestions (N skills, M pairs analyzed):
+Merge suggestions (N skills in K groups, M pairs analyzed):
 
   No merges recommended.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Summary: 0 recommended, 0 optional, M pairs below threshold (no action needed)
+         K groups · J skills isolated (no similar peers found)
 
 <insight paragraph>
 

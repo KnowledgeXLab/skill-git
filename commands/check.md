@@ -2,10 +2,23 @@
 name: skill-git:check
 description: Check a skill for internal rule conflicts, agent config conflicts, and security issues. Usage: /skill-git:check <skill-name> [-a <agent>]
 argument-hint: <skill-name> [-a <agent>]
-allowed-tools: Bash(bash *)
+allowed-tools: Bash(bash *), AskUserQuestion
 ---
 
 You are executing `/skill-git:check`. Follow the steps below precisely.
+
+## Task Tracking
+
+You MUST create a task for each item below and update each task's status as you progress (pending → in_progress → completed):
+
+1. **Parse arguments and resolve skill** — extract skill name, find the file across all known paths
+2. **Resolve agent configuration** — determine agent and locate config files
+3. **Read skill and config files** — load SKILL.md and agent config files
+4. **Extract and cache rules** — run rule extraction (or load from cache) for skill and configs
+5. **Run checks** — internal consistency, project config conflicts, global config conflicts, security scan
+6. **Output report** — format and display the full check report
+7. **Interactive resolution** — work through each fixable conflict if the user chooses to fix (conditional)
+8. **Confirm and write changes** — display pending change summary, wait for confirmation, apply file edits to skill and config files (conditional)
 
 ## Prelude
 
@@ -137,17 +150,14 @@ Then stop.
 
 **If exactly 1 match**: use it directly, derive `skill_dir` (see below), proceed to Step 4.
 
-**If multiple matches**: present a numbered list and ask the user to choose:
-```
-Found N skills named "<skill_name>":
-  [1] global skill         ~/.claude/skills/<skill_name>/SKILL.md
-  [2] superpowers (skill)  ~/.claude/plugins/cache/.../superpowers/5.0.5/skills/<skill_name>/SKILL.md
-  [3] hookify (command)    ~/.claude/plugins/cache/.../hookify/d53f/commands/<skill_name>.md
-  [4] project command      .claude/commands/<skill_name>.md
+**If multiple matches**: tell the user that N skills named `<skill_name>` were found, then use the AskUserQuestion tool:
+- question: "Found N skills named '<skill_name>'. Which one to check?"
+- header: "Skill"
+- options: build dynamically from the match list, up to 4 entries (label: short source name like "global skill" or "superpowers (skill)"; description: full file path). If there are more than 4 matches, include the first 3 and add a 4th option "More…" with description "Specify via /skill-git:check <plugin-name>:<skill-name> to target a plugin directly".
+- multiSelect: false
 
-Which one to check? (enter a number):
-  Tip: use /skill-git:check <plugin-name>:<skill-name> to target a plugin directly
-```
+Include a note in your message: "Tip: use /skill-git:check <plugin-name>:<skill-name> to target a plugin directly."
+
 Wait for the user's response, then proceed with the selected file.
 
 **After a file is selected, derive `skill_dir` and `skill_format`:**
@@ -326,13 +336,15 @@ For each section, use the following format:
 - `Summary: No issues found ✅`
 - `Summary: 2 conflicts and 1 security risk found — resolve before use`
 
-After the summary line, if there are any `high` or `medium` severity conflicts, or any security issues, ask:
+After the summary line, if there are any `high` or `medium` severity conflicts, or any security issues, use the AskUserQuestion tool:
+- question: "Fix these conflicts now?"
+- header: "Action"
+- options:
+  - label: "Yes, fix now", description: "Work through each conflict interactively"
+  - label: "No, skip", description: "Exit — conflicts remain unresolved"
+- multiSelect: false
 
-```
-Fix these conflicts now? (y/n)
-```
-
-If `n`, stop. If `y`, proceed to Step 7.
+If "No, skip", stop. If "Yes, fix now", proceed to Step 7.
 
 If there are no fixable issues (only `low` overlaps, or no issues at all), stop after the report.
 
@@ -342,66 +354,51 @@ Work through each fixable issue one at a time, in order of severity: 🔴 securi
 
 **Format for internal consistency conflicts** (two rules within the skill itself contradict each other):
 
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Conflict <N>/<total>: Internal consistency
-
-  [1] skill:<line>  "<rule_a text>"
-  [2] skill:<line>  "<rule_b text>"
-  [3] Write a custom rule (replaces both)
-  [4] Skip
-
-Which to keep?
-```
+Display the separator `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` and conflict header, then use the AskUserQuestion tool:
+- question: "Conflict <N>/<total> (Internal consistency): which rule to keep?"
+- header: "Keep rule"
+- options:
+  - label: "Keep rule [1]", description: "skill:<line>  \"<rule_a text>\""
+  - label: "Keep rule [2]", description: "skill:<line>  \"<rule_b text>\""
+  - label: "Write custom rule", description: "Enter a replacement in Other that supersedes both"
+  - label: "Skip", description: "Leave this conflict unresolved"
+- multiSelect: false
 
 **Format for config conflicts** (skill rule vs CLAUDE.md or global config):
 
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Conflict <N>/<total>: <check label, e.g. "Project config conflict">
-
-  [1] Keep skill rule  (remove conflicting line from <config file>)
-       skill:<line>  "<rule_a text>"
-
-  [2] Keep config rule  (remove conflicting line from skill)
-       <config file>:<line>  "<rule_b text>"
-
-  [3] Write a custom rule  (update both files)
-  [4] Skip
-
-Your choice:
-```
+Display the separator and conflict header, then use the AskUserQuestion tool:
+- question: "Conflict <N>/<total> (<check label>): which rule to keep?"
+- header: "Keep rule"
+- options:
+  - label: "Keep skill rule", description: "Remove conflicting line from <config file>. Rule: \"<rule_a text>\""
+  - label: "Keep config rule", description: "Remove conflicting line from skill. Rule: \"<rule_b text>\""
+  - label: "Write custom rule", description: "Enter a replacement in Other to update both files"
+  - label: "Skip", description: "Leave this conflict unresolved"
+- multiSelect: false
 
 **Format for security issues** (single rule, no opposing rule):
 
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔴 Security issue <N>/<total>: <risk type>
-
-  skill:<line>  "<rule text>"
-  Risk: <explanation>
-
-  [1] Delete this rule
-  [2] Edit this rule (tell me what to change it to)
-  [3] Skip
-
-Your choice:
-```
+Display the separator, then use the AskUserQuestion tool:
+- question: "Security issue <N>/<total> (<risk type>): how to address? Rule: \"<rule text>\". Risk: <explanation>"
+- header: "Action"
+- options:
+  - label: "Delete this rule", description: "Remove the rule entirely from the skill"
+  - label: "Edit this rule", description: "Provide replacement text in Other"
+  - label: "Skip", description: "Leave this security issue unresolved"
+- multiSelect: false
 
 **Handling each choice:**
 
-- `[1]` / `[2]` — record which file to modify and which line to remove
-- `[3]` Write custom:
-  - Prompt: `Enter the new rule:`
-  - Record the custom text; both files will be updated
-- `[4]` Skip — record as skipped, move to next
-- `[2]` Edit (security) — prompt: `Enter the corrected rule:`, record the replacement text
+- "Keep rule [1]" / "Keep rule [2]" / "Keep skill rule" / "Keep config rule" — record which file to modify and which line to remove
+- "Write custom rule" — use the Other text as the new rule; both files will be updated
+- "Skip" — record as skipped, move to next
+- "Edit this rule" (security prompt) — use the Other text as the corrected replacement rule
 
 Do not write any files yet. Collect all decisions first.
 
 ## Step 8: Confirm and Write
 
-After all issues have been presented, display a summary of pending changes and ask for confirmation:
+After all issues have been presented, display a summary of pending changes:
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -415,13 +412,19 @@ Pending changes:
     - Remove line <N>: "<text>"
 
   (<N> skipped — not modified)
-
-Write these changes? (y/n)
 ```
 
-If `n`, discard all changes and stop. No files are written.
+Then use the AskUserQuestion tool:
+- question: "Write these changes to disk?"
+- header: "Action"
+- options:
+  - label: "Yes, write changes", description: "Apply all pending modifications to skill and config files"
+  - label: "No, discard", description: "Exit without writing anything"
+- multiSelect: false
 
-If `y`, apply the changes to each file. Then output:
+If "No, discard", discard all changes and stop. No files are written.
+
+If "Yes, write changes", apply the changes to each file. Then output:
 
 ```
 Done ✅

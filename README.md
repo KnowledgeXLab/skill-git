@@ -29,7 +29,7 @@ Track changes, seamlessly roll back bad edits, and—most importantly—**merge 
 One line install the plugin to Claude code:
 ```bash
 claude plugin marketplace add KnowledgeXLab/skill-git
-claude plugin install skill-git@skill-git
+claude plugin install skill-git@knowledgexlab
 ```
 
 Then run:
@@ -99,7 +99,7 @@ Your latest `planner` update introduced conflicts and you want to undo it.
 **Claude** (Recommended)
 ```bash
 claude plugin marketplace add KnowledgeXLab/skill-git
-claude plugin install skill-git@skill-git
+claude plugin install skill-git@knowledgexlab
 ```
 
 **OpenClaw**

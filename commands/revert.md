@@ -2,10 +2,21 @@
 name: skill-git:revert
 description: Roll back one or more skills to a previous version. Use when the user wants to undo skill changes, discard uncommitted edits, restore an older version, or recover from a bad commit. Triggers on "revert my skill", "roll back skill", "restore skill to v1.0.0", "undo my skill changes", or similar.
 argument-hint: [<skill-name>] [-a <agent>]
-allowed-tools: Bash(bash *)
+allowed-tools: Bash(bash *), AskUserQuestion
 ---
 
 You are running `/skill-git:revert`. Follow these steps exactly.
+
+## Task Tracking
+
+You MUST create a task for each item below and update each task's status as you progress (pending → in_progress → completed):
+
+1. **Select skill(s)** — parse arguments or list registered skills for the user to choose
+2. **Determine target version** — detect dirty/clean state, resolve target tag for each skill
+3. **Analyze changes** — summarize what will be undone in plain language
+4. **Confirm with user** — show warning prompt and wait for explicit confirmation
+5. **Execute revert** — backup, reset, delete tags, update config.json
+6. **Report result** — display success/failure for each skill
 
 ## Prelude
 
@@ -29,19 +40,13 @@ Parse `$ARGUMENTS` for any skill name(s) or version hints expressed in natural l
 - One or more skill names → proceed with those skills
 - A version tag (e.g. `v1.0.1`) → use as the target version (resolve skill interactively if ambiguous)
 
-If no skill is specified, list all registered skills and prompt:
+If no skill is specified, display the registered skills list, then use the AskUserQuestion tool:
+- question: "Which skill(s) do you want to revert?"
+- header: "Skills"
+- options: build dynamically from registered skills (label: skill name, description: "current: <version>"). Include up to 3 individual skills plus an "All skills" option as the 4th. If there are more than 3 skills, choose the most recently changed 3. The user may also type skill names or numbers in Other.
+- multiSelect: true (allow selecting multiple individual skills)
 
-```
-Registered skills:
-
-  1. <skill-name>    current: <version>
-  2. <skill-name>    current: <version>
-  ...
-
-Which skill(s) do you want to revert? (enter number(s), name(s), or "all")
-```
-
-Wait for the user's response. Resolve to one or more skill names and paths. Validate each name exists in the `skills` map; if not, tell the user and stop.
+Resolve the selection to one or more skill names and paths. If "All skills" is selected, use all registered skills. Validate each name exists in the `skills` map; if not, tell the user and stop.
 
 ## Step 2 — Detect Scenario and Determine Target Version
 
@@ -106,6 +111,7 @@ Display a confirmation for all selected skills in a single message. Choose the w
 
 **Scenario A — Discard uncommitted changes only:**
 
+Display:
 ```
 ⚠️  The following uncommitted changes will be permanently discarded:
 
@@ -113,14 +119,21 @@ Display a confirmation for all selected skills in a single message. Choose the w
   <2-3 sentence description of what will be lost>
 
 This cannot be undone.
-
-Proceed? (y/n)
 ```
+
+Then use the AskUserQuestion tool:
+- question: "Permanently discard these uncommitted changes in <skill-name>?"
+- header: "Confirm"
+- options:
+  - label: "Yes, discard changes", description: "Restore <skill-name> to <current-version> (cannot be undone)"
+  - label: "No, cancel", description: "Exit without making any changes"
+- multiSelect: false
 
 ---
 
 **Scenario A with older version target — Discard uncommitted AND hard-reset:**
 
+Display:
 ```
 🚨  WARNING: Two destructive operations will be performed on <skill-name>:
 
@@ -134,14 +147,21 @@ Proceed? (y/n)
   <2-3 sentence description of what will be undone>
 
 This cannot be undone. These versions will be gone forever.
-
-Type "yes" to confirm, or "n" to cancel:
 ```
+
+Then use the AskUserQuestion tool:
+- question: "Perform both destructive operations on <skill-name>? This cannot be undone."
+- header: "Confirm"
+- options:
+  - label: "Yes, revert to <target-version>", description: "Discard uncommitted changes AND permanently delete the listed versions"
+  - label: "No, cancel", description: "Exit without making any changes"
+- multiSelect: false
 
 ---
 
 **Scenario B — Single version back (default):**
 
+Display:
 ```
 The following changes will be permanently removed from <skill-name>:
 
@@ -152,14 +172,21 @@ The following changes will be permanently removed from <skill-name>:
   <2-3 sentence description of what will be undone>
 
 This cannot be undone.
-
-Proceed? (y/n)
 ```
+
+Then use the AskUserQuestion tool:
+- question: "Permanently remove these changes from <skill-name>?"
+- header: "Confirm"
+- options:
+  - label: "Yes, revert to <target-version>", description: "Delete tag <current-version> and reset to <target-version> (cannot be undone)"
+  - label: "No, cancel", description: "Exit without making any changes"
+- multiSelect: false
 
 ---
 
 **Scenario B — Multi-version jump:**
 
+Display:
 ```
 🚨  WARNING: Multiple committed versions of <skill-name> will be permanently deleted:
 
@@ -170,15 +197,17 @@ Proceed? (y/n)
   <2-3 sentence description of what will be undone across all deleted versions>
 
 This cannot be undone. All listed versions will be gone forever.
-
-Type "yes" to confirm, or "n" to cancel:
 ```
 
----
+Then use the AskUserQuestion tool:
+- question: "Permanently delete these versions of <skill-name>? This cannot be undone."
+- header: "Confirm"
+- options:
+  - label: "Yes, delete versions", description: "Revert from <current-version> to <target-version>, permanently deleting all listed tags"
+  - label: "No, cancel", description: "Exit without making any changes"
+- multiSelect: false
 
-Wait for the user's response.
-- Single-version / Scenario A (uncommitted only): accept `y` or `n`.
-- Multi-version / combined operations: require `yes` (full word) to proceed.
+---
 
 If the user does not confirm, tell them nothing was changed and stop.
 

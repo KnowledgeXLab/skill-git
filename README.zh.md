@@ -27,7 +27,7 @@
 一行命令安装插件到 Claude Code：
 ```bash
 claude plugin marketplace add KnowledgeXLab/skill-git
-claude plugin install skill-git@skill-git
+claude plugin install skill-git@knowledgexlab
 ```
 
 然后运行：
@@ -97,7 +97,7 @@ claude plugin install skill-git@skill-git
 **Claude**（推荐）
 ```bash
 claude plugin marketplace add KnowledgeXLab/skill-git
-claude plugin install skill-git@skill-git
+claude plugin install skill-git@knowledgexlab
 ```
 
 **OpenClaw**

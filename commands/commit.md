@@ -2,10 +2,19 @@
 name: skill-git:commit
 description: Use when the user wants to snapshot, save, or version their skills. Triggers on "commit my skills", "save skill changes", "new version of my skill", or after editing any SKILL.md file.
 argument-hint: [-a <agent>]
-allowed-tools: Bash(bash *)
+allowed-tools: Bash(bash *), AskUserQuestion
 ---
 
 You are running `/skill-git:commit`. Follow these steps exactly.
+
+## Task Tracking
+
+You MUST create a task for each item below and update each task's status as you progress (pending → in_progress → completed):
+
+1. **Scan for changes** — warn about unregistered skills, then parallel-scan all skills for diffs
+2. **Display change summary** — show what changed and ask the user which skills to commit
+3. **Suggest versions and messages** — analyze diffs, propose semver bumps and commit messages
+4. **Execute commits** — run git add, commit, tag, and update config.json for confirmed skills
 
 ## Prelude
 
@@ -75,7 +84,7 @@ Otherwise, for each skill with `changed: true`, read the diff/content returned b
 
 A skill is a **new skill** if its name does not appear in the `skills` map in config.json.
 
-Display the summary and prompt the user:
+Display the change summary in this format:
 
 ```
 📋 Detected changes in N skill(s):
@@ -87,19 +96,22 @@ Display the summary and prompt the user:
      <2-3 sentence English description of the new skill>
 
   ...
-
-How to proceed?
-  a) Commit all
-  b) Commit selected (enter numbers or names, e.g. "1,3" or "humanizer code-review")
-  c) Cancel
-  d) Other (describe what you want)
 ```
 
-Wait for the user's response. Parse it to determine which skills to commit:
-- `a` → all changed skills
-- `b` + input → match by number (1-based index in the list) or by skill name; both are accepted
-- `c` → stop, tell the user nothing was committed
-- `d` or free text → interpret the user's intent and clarify if needed
+Then use the AskUserQuestion tool:
+- question: "How would you like to proceed with these N changed skill(s)?"
+- header: "Action"
+- options:
+  - label: "Commit all", description: "Commit all N changed skills"
+  - label: "Commit selected", description: "Specify names or numbers in Other (e.g. '1,3' or 'humanizer code-review')"
+  - label: "Cancel", description: "Exit without committing anything"
+- multiSelect: false
+(No explicit "Other" option needed — it is added automatically by the UI.)
+
+Parse the response to determine which skills to commit:
+- "Commit all" → all changed skills
+- "Commit selected" or any Other free-text → parse for skill names/numbers (1-based index in the list); clarify if ambiguous
+- "Cancel" → tell the user nothing was committed and stop
 
 ## Step 3 — Version & Message Suggestions
 
@@ -129,15 +141,18 @@ Here are the suggested versions and messages for all selected skills:
      "<commit message>"
 
   ...
-
-How to proceed?
-  a) Accept all
-  b) Edit specific ones (enter numbers or names + your changes)
-  c) Cancel
-  d) Other
 ```
 
-Wait for the user's response. Collect all final versions and messages before moving to execution. Do not execute anything yet.
+Then use the AskUserQuestion tool:
+- question: "Accept these version and message suggestions?"
+- header: "Action"
+- options:
+  - label: "Accept all", description: "Use all suggested versions and commit messages as-is"
+  - label: "Edit specific ones", description: "Specify in Other which to edit and your changes (e.g. '2: bump to v1.1.0, message \"add em-dash rule\"')"
+  - label: "Cancel", description: "Exit without committing"
+- multiSelect: false
+
+Collect all final versions and messages before moving to execution. Do not execute anything yet.
 
 ## Step 4 — Execute
 
