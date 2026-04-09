@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>skill-git — Git for your AI agent skills</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f0f23;
+      --fg: #e8e8f0;
+      --muted: #8b8baa;
+      --accent: #7c6dff;
+      --accent-light: #a89fff;
+      --border: rgba(124, 109, 255, 0.2);
+      --border-dim: rgba(255, 255, 255, 0.07);
+      --card-bg: rgba(255, 255, 255, 0.03);
+      --code-bg: rgba(124, 109, 255, 0.12);
+      --radius: 8px;
+      --max: 860px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      background-image: radial-gradient(ellipse at 60% 0%, rgba(124,109,255,0.12) 0%, transparent 60%);
+      color: var(--fg);
+      font-size: 16px;
+      line-height: 1.7;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    .fade-up {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .fade-up.visible { opacity: 1; transform: translateY(0); }
+
+    /* Nav */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      padding: 0 24px; height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+      transition: background 0.3s, border-color 0.3s;
+      border-bottom: 1px solid transparent;
+    }
+    nav.scrolled {
+      background: rgba(15, 15, 35, 0.85);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border-color: var(--border-dim);
+    }
+    .nav-logo { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+    .nav-logo span { color: var(--accent-light); }
+    .nav-links { display: flex; align-items: center; gap: 24px; font-size: 13px; color: var(--muted); }
+    .nav-links a:hover { color: var(--fg); transition: color 0.2s; }
+    .nav-github { display: flex; align-items: center; gap: 6px; }
+    .nav-github svg { width: 16px; height: 16px; fill: currentColor; }
+    .lang-btn {
+      font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
+      color: var(--muted); cursor: pointer;
+      border: 1px solid var(--border-dim); background: none;
+      padding: 4px 10px; border-radius: 4px;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .lang-btn:hover { color: var(--fg); border-color: var(--border); }
+
+    /* Layout */
+    .container { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+    section { padding: 96px 0; }
+    .section-label {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--accent-light); margin-bottom: 12px;
+    }
+    .section-title { font-size: clamp(22px, 3vw, 28px); font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; }
+    .section-sub { font-size: 15px; color: var(--muted); margin-bottom: 48px; }
+
+    /* Hero */
+    #hero { min-height: 100vh; display: flex; align-items: center; text-align: center; padding: 120px 0 80px; }
+    #hero .container { width: 100%; }
+    .hero-badge {
+      display: inline-block; font-size: 11px; font-weight: 600;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--accent-light); background: rgba(124,109,255,0.1);
+      border: 1px solid rgba(124,109,255,0.25); padding: 4px 14px;
+      border-radius: 20px; margin-bottom: 28px;
+    }
+    .hero-title {
+      font-size: clamp(36px, 6vw, 64px); font-weight: 800;
+      letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 20px; color: #fff;
+    }
+    .hero-title .dim { color: var(--muted); font-weight: 600; }
+    .hero-sub { font-size: clamp(15px, 2vw, 18px); color: var(--muted); max-width: 520px; margin: 0 auto 40px; line-height: 1.6; }
+    .hero-install {
+      display: inline-flex; flex-direction: column; gap: 6px; align-items: flex-start;
+      background: var(--code-bg); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px 20px;
+      font-family: "SF Mono", "Fira Code", monospace; font-size: 14px;
+      color: var(--accent-light); margin-bottom: 32px;
+    }
+    .install-line { display: flex; align-items: center; gap: 12px; }
+    .install-line-2 { opacity: 0; transition: opacity 0.2s; }
+    .install-line-2.visible { opacity: 1; }
+    .hero-install .prompt { color: rgba(124,109,255,0.5); }
+    #typed-cmd-1::after, #typed-cmd-2::after { content: '|'; animation: blink 1s step-end infinite; color: var(--accent); }
+    #typed-cmd-1.done::after, #typed-cmd-2.done::after { display: none; }
+    @keyframes blink { 50% { opacity: 0; } }
+    .hero-actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 22px; border-radius: var(--radius);
+      font-size: 14px; font-weight: 500; cursor: pointer;
+      transition: opacity 0.2s, transform 0.2s;
+    }
+    .btn:hover { opacity: 0.85; transform: translateY(-1px); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-secondary { border: 1px solid var(--border); color: var(--muted); background: transparent; }
+    .btn svg { width: 16px; height: 16px; fill: currentColor; }
+
+    /* Features */
+    #features { border-top: 1px solid var(--border-dim); }
+    .features-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 56px; }
+    .feature-card {
+      background: var(--card-bg); border: 1px solid var(--border-dim);
+      border-radius: var(--radius); padding: 24px;
+      transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+    }
+    .feature-card:hover { border-color: var(--border); transform: translateY(-4px); box-shadow: 0 8px 32px rgba(124,109,255,0.12); }
+    .feature-icon { font-size: 22px; margin-bottom: 12px; }
+    .feature-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+    .feature-card p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+    .teaser-wrap {
+      border-radius: 12px; overflow: hidden; border: 1px solid var(--border);
+      box-shadow: 0 0 60px rgba(124,109,255,0.15), 0 0 0 1px rgba(124,109,255,0.1);
+    }
+    .teaser-wrap img { width: 100%; display: block; }
+
+    /* Commands */
+    #commands { border-top: 1px solid var(--border-dim); }
+    .cmd-list { display: flex; flex-direction: column; }
+    .cmd-row {
+      display: grid; grid-template-columns: 220px 1fr; gap: 20px;
+      align-items: center; padding: 18px 0; border-top: 1px solid var(--border-dim);
+    }
+    .cmd-row:last-child { border-bottom: 1px solid var(--border-dim); }
+    .cmd-tag {
+      font-family: "SF Mono","Fira Code",monospace; font-size: 13px;
+      background: var(--code-bg); border: 1px solid var(--border);
+      color: var(--accent-light); padding: 4px 10px; border-radius: 5px;
+      display: inline-block; white-space: nowrap;
+    }
+    .cmd-desc { font-size: 14px; color: var(--muted); }
+
+    /* Installation */
+    #installation { border-top: 1px solid var(--border-dim); }
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border-dim); }
+    .tab-btn {
+      font-size: 13px; font-weight: 500; color: var(--muted);
+      padding: 8px 16px; cursor: pointer; border: none;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+      transition: color 0.2s, border-color 0.2s; background: none;
+    }
+    .tab-btn:hover { color: var(--fg); }
+    .tab-btn.active { color: var(--accent-light); border-bottom-color: var(--accent); }
+    .tab-panel { display: none; animation: fadeIn 0.2s ease; }
+    .tab-panel.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    pre {
+      font-family: "SF Mono","Fira Code",monospace; font-size: 13px;
+      background: var(--code-bg); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px 20px; overflow-x: auto;
+      line-height: 1.7; color: var(--accent-light); margin-bottom: 12px;
+    }
+    pre .comment { color: rgba(139,139,170,0.6); }
+
+    /* Best Practices */
+    #best-practices { border-top: 1px solid var(--border-dim); }
+    .workflow-list { display: flex; flex-direction: column; gap: 16px; }
+    .workflow-card {
+      background: var(--card-bg); border: 1px solid var(--border-dim);
+      border-radius: var(--radius); padding: 28px 32px; transition: border-color 0.25s;
+    }
+    .workflow-card:hover { border-color: var(--border); }
+    .workflow-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+    .workflow-card p { font-size: 14px; color: var(--muted); margin-bottom: 14px; line-height: 1.6; }
+    .workflow-card pre { font-size: 13px; padding: 12px 16px; margin-bottom: 10px; background: rgba(0,0,0,0.25); border-color: rgba(124,109,255,0.15); }
+    .workflow-card pre:last-child { margin-bottom: 0; }
+    .workflow-result { font-size: 13px; color: var(--muted); font-style: italic; }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border-dim); padding: 32px 24px;
+      max-width: var(--max); margin: 0 auto;
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 13px; color: var(--muted); flex-wrap: wrap; gap: 12px;
+    }
+    footer a:hover { color: var(--fg); transition: color 0.2s; }
+
+    /* Responsive */
+    @media (max-width: 800px) { .features-grid { grid-template-columns: repeat(2,1fr); } }
+    @media (max-width: 640px) {
+      .features-grid { grid-template-columns: 1fr; }
+      .cmd-row { grid-template-columns: 1fr; gap: 6px; }
+      .nav-links a:not(.nav-github):not(.lang-btn) { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<nav id="nav">
+  <a href="#hero" class="nav-logo">skill<span>-git</span></a>
+  <div class="nav-links">
+    <a href="#features" data-i18n="nav.features">Features</a>
+    <a href="#commands" data-i18n="nav.commands">Commands</a>
+    <a href="#installation" data-i18n="nav.install">Install</a>
+    <a href="#best-practices" data-i18n="nav.bp">Best Practices</a>
+    <a href="https://github.com/KnowledgeXLab/skill-git" target="_blank" class="nav-github">
+      <svg viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+      GitHub
+    </a>
+    <button class="lang-btn" id="lang-toggle">中文</button>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section id="hero">
+  <div class="container">
+    <div class="hero-badge fade-up">KnowledgeXLab / skill-git</div>
+    <h1 class="hero-title fade-up" data-i18n-html="hero.title">
+      Git, but for your<br><span class="dim">AI agent skills.</span>
+    </h1>
+    <p class="hero-sub fade-up" data-i18n="hero.sub">
+      Track changes, roll back bad edits, and merge overlapping skills — across Claude, Gemini, Codex, and OpenClaw.
+    </p>
+    <div class="hero-install fade-up">
+      <div class="install-line"><span class="prompt">$</span><span id="typed-cmd-1"></span></div>
+      <div class="install-line install-line-2" id="cmd-line-2"><span class="prompt">$</span><span id="typed-cmd-2"></span></div>
+    </div>
+    <div class="hero-actions fade-up">
+      <a href="#installation" class="btn btn-primary" data-i18n="hero.cta">Get Started</a>
+      <a href="https://github.com/KnowledgeXLab/skill-git" target="_blank" class="btn btn-secondary">
+        <svg viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        <span data-i18n="hero.github">View on GitHub</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section id="features">
+  <div class="container">
+    <div class="section-label fade-up" data-i18n="features.label">Features</div>
+    <h2 class="section-title fade-up" data-i18n="features.title">Everything your skills need</h2>
+    <p class="section-sub fade-up" data-i18n="features.sub">Stop managing messy, fragmented agent capabilities.</p>
+    <div class="features-grid">
+      <div class="feature-card fade-up">
+        <div class="feature-icon">📦</div>
+        <h3 data-i18n="feat1.title">Version Control</h3>
+        <p data-i18n="feat1.desc">Each skill gets its own independent git repo with semantic versioning. Full history, always.</p>
+      </div>
+      <div class="feature-card fade-up">
+        <div class="feature-icon">⏪</div>
+        <h3 data-i18n="feat2.title">Safe Rollback</h3>
+        <p data-i18n="feat2.desc">Roll back any skill to any previous version. Atomic operation — backup first, restore on failure.</p>
+      </div>
+      <div class="feature-card fade-up">
+        <div class="feature-icon">🛡️</div>
+        <h3 data-i18n="feat3.title">Conflict Detection</h3>
+        <p data-i18n="feat3.desc">Audit skills for internal rule conflicts, contradictions, and security issues before they cause problems.</p>
+      </div>
+      <div class="feature-card fade-up">
+        <div class="feature-icon">🔀</div>
+        <h3 data-i18n="feat4.title">Smart Merge</h3>
+        <p data-i18n="feat4.desc">Scan for overlapping skills and merge them into one stronger, unified tool. No more duplicates.</p>
+      </div>
+      <div class="feature-card fade-up">
+        <div class="feature-icon">🌐</div>
+        <h3 data-i18n="feat5.title">Multi-Platform</h3>
+        <p data-i18n="feat5.desc">Works across Claude, OpenClaw, Gemini, and Codex out of the box.</p>
+      </div>
+      <div class="feature-card fade-up">
+        <div class="feature-icon">🚀</div>
+        <h3 data-i18n="feat6.title">Portable</h3>
+        <p data-i18n="feat6.desc">Each skill folder is self-contained. Move or share it — the full history travels with it.</p>
+      </div>
+      <div class="feature-card fade-up">
+        <div class="feature-icon">🔍</div>
+        <h3 data-i18n="feat7.title">Discover &amp; Install</h3>
+        <p data-i18n="feat7.desc">Search SkillHub and ClawHub by keyword — install in one command with automatic conflict detection.</p>
+      </div>
+      <div class="feature-card fade-up">
+        <div class="feature-icon">🗑️</div>
+        <h3 data-i18n="feat8.title">Library Management</h3>
+        <p data-i18n="feat8.desc">List, inspect, and delete skills. Keep your library lean and intentional.</p>
+      </div>
+    </div>
+    <div class="teaser-wrap fade-up">
+      <img src="teaser.png" alt="skill-git in action" />
+    </div>
+  </div>
+</section>
+
+<!-- Commands -->
+<section id="commands">
+  <div class="container">
+    <div class="section-label fade-up" data-i18n="commands.label">Commands</div>
+    <h2 class="section-title fade-up" data-i18n="commands.title">Ten commands. Full control.</h2>
+    <p class="section-sub fade-up" data-i18n="commands.sub">Everything you need, nothing you don't.</p>
+    <div class="cmd-list">
+      <div class="cmd-row fade-up"><span class="cmd-tag">/skill-git:init</span><span class="cmd-desc" data-i18n="cmd.init">Initialize version tracking for all your skills across one or more agents.</span></div>
+      <div class="cmd-row fade-up"><span class="cmd-tag">/skill-git:commit</span><span class="cmd-desc" data-i18n="cmd.commit">Snapshot changes with an auto-bumped semver tag. You confirm before anything is written.</span></div>
+      <div class="cmd-row fade-up"><span class="cmd-tag">/skill-git:revert</span><span class="cmd-desc" data-i18n="cmd.revert">Roll back a skill to any previous version. Defaults to the previous tag if no version given.</span></div>
+      <div class="cmd-row fade-up"><span class="cmd-tag">/skill-git:check</span><span class="cmd-desc" data-i18n="cmd.check">Audit a skill for rule conflicts, contradictory configs, and security issues.</span></div>
+      <div class="cmd-row fade-up"><span class="cmd-tag">/skill-git:scan</span><span class="cmd-desc" data-i18n="cmd.scan">Find semantically overlapping skills. Each pair is rated and cached for merge to pick up.</span></div>
+      <div class="cmd-row fade-up"><span class="cmd-tag">/skill-git:merge</span><span class="cmd-desc" data-i18n="cmd.merge">Combine two similar skills into one. Conflicts resolved interactively. Nothing written until you confirm.</span></div>
+      <div class="cmd-row fade-up"><span class="cmd-tag">/skill-git:search</span><span class="cmd-desc" data-i18n="cmd.search">Discover skills from SkillHub and ClawHub by keyword or similarity to your existing skills.</span></div>
+      <div class="cmd-row fade-up"><span class="cmd-tag">/skill-git:install</span><span class="cmd-desc" data-i18n="cmd.install">Install a skill from SkillHub or ClawHub with one command. Detects conflicts before writing anything.</span></div>
+      <div class="cmd-row fade-up"><span class="cmd-tag">/skill-git:list</span><span class="cmd-desc" data-i18n="cmd.list">List all installed skills with their current versions and registration status.</span></div>
+      <div class="cmd-row fade-up"><span class="cmd-tag">/skill-git:delete</span><span class="cmd-desc" data-i18n="cmd.delete">Permanently remove a skill from disk and config. Warns if uncommitted changes exist.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- Installation -->
+<section id="installation">
+  <div class="container">
+    <div class="section-label fade-up" data-i18n="install.label">Installation</div>
+    <h2 class="section-title fade-up" data-i18n="install.title">Up and running in seconds</h2>
+    <p class="section-sub fade-up" data-i18n="install.sub">Pick your platform and paste one command.</p>
+    <div class="fade-up">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="claude">Claude (<span style="color:var(--accent-light);" data-i18n="install.recommended">Recommended</span>)</button>
+        <button class="tab-btn" data-tab="openclaw">OpenClaw</button>
+        <button class="tab-btn" data-tab="gemini">Gemini</button>
+        <button class="tab-btn" data-tab="codex">Codex</button>
+      </div>
+      <div class="tab-panel active" id="tab-claude">
+        <pre>claude plugin marketplace add KnowledgeXLab/skill-git
+claude plugin install skill-git@knowledgexlab</pre>
+        <pre><span class="comment" data-i18n="install.c1"># Then initialize</span>
+/skill-git:init
+
+<span class="comment" data-i18n="install.c2"># Or specify the agent</span>
+/skill-git:init -a claude</pre>
+      </div>
+      <div class="tab-panel" id="tab-openclaw">
+        <pre>clawhub install skill-git</pre>
+        <pre><span class="comment" data-i18n="install.c1"># Then initialize</span>
+/skill-git:init -a openclaw</pre>
+      </div>
+      <div class="tab-panel" id="tab-gemini">
+        <pre>gemini extensions install https://github.com/KnowledgeXLab/skill-git</pre>
+        <pre><span class="comment" data-i18n="install.c1"># Then initialize</span>
+/skill-git:init -a gemini</pre>
+      </div>
+      <div class="tab-panel" id="tab-codex">
+        <pre>npx skills add KnowledgeXLab/skill-git -a codex</pre>
+        <pre><span class="comment" data-i18n="install.c1"># Then initialize</span>
+/skill-git:init -a codex</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Best Practices -->
+<section id="best-practices">
+  <div class="container">
+    <div class="section-label fade-up" data-i18n="bp.label">Best Practices</div>
+    <h2 class="section-title fade-up" data-i18n="bp.title">Get the most out of skill-git</h2>
+    <p class="section-sub fade-up" data-i18n="bp.sub">Workflow guides and recommendations.</p>
+    <div class="workflow-list">
+      <div class="workflow-card fade-up">
+        <h3 data-i18n="bp.w0.title">🔍 Find, install, and version-control a new skill</h3>
+        <p data-i18n="bp.w0.desc">You want to add a skill but aren't sure what's out there.</p>
+        <pre>/skill-git:search I want to do code review
+/skill-git:install clawhub:code-review
+/skill-git:commit</pre>
+        <p class="workflow-result" data-i18n="bp.w0.result">→ search returns top results from SkillHub and ClawHub ranked by relevance. install drops files into ~/.claude/skills/ tagged v1.0.0 automatically. You're version-controlled from day one.</p>
+      </div>
+      <div class="workflow-card fade-up">
+        <h3 data-i18n="bp.w2.title">⏪ Edit a skill, keep what's good, undo what isn't</h3>
+        <p data-i18n-html="bp.w2.desc">You tweak your <code>planner</code> skill. Some changes work; one update breaks your workflow a week later.</p>
+        <pre>/skill-git:commit             <span class="comment"># after a good edit — tags v1.0.1</span>
+/skill-git:commit             <span class="comment"># after another — tags v1.0.2</span>
+/skill-git:revert planner     <span class="comment"># something broke → rolls back to v1.0.1 instantly</span></pre>
+        <p class="workflow-result" data-i18n="bp.w2.result">→ Each commit captures the full diff and bumps the version. Revert is atomic — a backup is taken first and restored automatically if anything fails. No edit is ever truly gone.</p>
+      </div>
+      <div class="workflow-card fade-up">
+        <h3 data-i18n="bp.w3.title">🔀 Shrink your library by merging what overlaps</h3>
+        <p data-i18n-html="bp.w3.desc">Over time you accumulated <code>code-review</code>, <code>critic</code>, and <code>pr-feedback</code>. They've started contradicting each other.</p>
+        <pre>/skill-git:scan                        <span class="comment"># finds all overlapping pairs, rated ★★★ / ★★☆ / ★☆☆</span>
+/skill-git:merge code-review critic    <span class="comment"># combines the top pair interactively</span>
+/skill-git:commit                      <span class="comment"># snapshots the merged result as v1.1.0</span>
+/skill-git:delete critic               <span class="comment"># remove the now-redundant original</span></pre>
+        <p class="workflow-result" data-i18n="bp.w3.result">→ scan shows you the overlap score before you commit to anything. merge resolves conflicts interactively — nothing is written until you confirm. delete asks for explicit confirmation and warns you if the skill has uncommitted changes.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <span data-i18n="footer.copy">skill-git by KnowledgeXLab</span>
+  <a href="https://github.com/KnowledgeXLab/skill-git" target="_blank">GitHub →</a>
+</footer>
+
+<script>
+  // ── i18n dictionary ──
+  const dict = {
+    en: {
+      'nav.features': 'Features', 'nav.commands': 'Commands',
+      'nav.install': 'Install', 'nav.bp': 'Best Practices',
+      'hero.title': 'Git, but for your<br><span class="dim">AI agent skills.</span>',
+      'hero.sub': 'Track changes, roll back bad edits, and merge overlapping skills — across Claude, Gemini, Codex, and OpenClaw.',
+      'hero.cta': 'Get Started', 'hero.github': 'View on GitHub',
+      'features.label': 'Features', 'features.title': 'Everything your skills need',
+      'features.sub': 'Stop managing messy, fragmented agent capabilities.',
+      'feat1.title': 'Version Control', 'feat1.desc': 'Each skill gets its own independent git repo with semantic versioning. Full history, always.',
+      'feat2.title': 'Safe Rollback', 'feat2.desc': 'Roll back any skill to any previous version. Atomic operation — backup first, restore on failure.',
+      'feat3.title': 'Conflict Detection', 'feat3.desc': 'Audit skills for internal rule conflicts, contradictions, and security issues before they cause problems.',
+      'feat4.title': 'Smart Merge', 'feat4.desc': 'Scan for overlapping skills and merge them into one stronger, unified tool. No more duplicates.',
+      'feat5.title': 'Multi-Platform', 'feat5.desc': 'Works across Claude, OpenClaw, Gemini, and Codex out of the box.',
+      'feat6.title': 'Portable', 'feat6.desc': 'Each skill folder is self-contained. Move or share it — the full history travels with it.',
+      'feat7.title': 'Discover & Install', 'feat7.desc': 'Search SkillHub and ClawHub by keyword — install in one command with automatic conflict detection.',
+      'feat8.title': 'Library Management', 'feat8.desc': 'List, inspect, and delete skills. Keep your library lean and intentional.',
+      'commands.label': 'Commands', 'commands.title': 'Ten commands. Full control.',
+      'commands.sub': "Everything you need, nothing you don't.",
+      'cmd.init': 'Initialize version tracking for all your skills across one or more agents.',
+      'cmd.commit': 'Snapshot changes with an auto-bumped semver tag. You confirm before anything is written.',
+      'cmd.revert': 'Roll back a skill to any previous version. Defaults to the previous tag if no version given.',
+      'cmd.check': 'Audit a skill for rule conflicts, contradictory configs, and security issues.',
+      'cmd.scan': 'Find semantically overlapping skills. Each pair is rated and cached for merge to pick up.',
+      'cmd.merge': 'Combine two similar skills into one. Conflicts resolved interactively. Nothing written until you confirm.',
+      'cmd.search': 'Discover skills from SkillHub and ClawHub by keyword or similarity to your existing skills.',
+      'cmd.install': 'Install a skill from SkillHub or ClawHub with one command. Detects conflicts before writing anything.',
+      'cmd.list': 'List all installed skills with their current versions and registration status.',
+      'cmd.delete': 'Permanently remove a skill from disk and config. Warns if uncommitted changes exist.',
+      'install.label': 'Installation', 'install.title': 'Up and running in seconds',
+      'install.sub': 'Pick your platform and paste one command.',
+      'install.c1': '# Then initialize', 'install.c2': '# Or specify the agent', 'install.recommended': 'Recommended',
+      'bp.label': 'Best Practices', 'bp.title': 'Get the most out of skill-git',
+      'bp.sub': 'Workflow guides and recommendations.',
+      'bp.w0.title': '🔍 Find, install, and version-control a new skill',
+      'bp.w0.desc': "You want to add a skill but aren't sure what's out there.",
+      'bp.w0.result': "→ search returns top results from SkillHub and ClawHub ranked by relevance. install drops files into ~/.claude/skills/ tagged v1.0.0 automatically. You're version-controlled from day one.",
+      'bp.w2.title': "⏪ Edit a skill, keep what's good, undo what isn't",
+      'bp.w2.desc': 'You tweak your <code>planner</code> skill. Some changes work; one update breaks your workflow a week later.',
+      'bp.w2.result': '→ Each commit captures the full diff and bumps the version. Revert is atomic — a backup is taken first and restored automatically if anything fails. No edit is ever truly gone.',
+      'bp.w3.title': '🔀 Shrink your library by merging what overlaps',
+      'bp.w3.desc': 'Over time you accumulated <code>code-review</code>, <code>critic</code>, and <code>pr-feedback</code>. They\'ve started contradicting each other.',
+      'bp.w3.result': '→ scan shows you the overlap score before you commit to anything. merge resolves conflicts interactively — nothing is written until you confirm. delete asks for explicit confirmation and warns you if the skill has uncommitted changes.',
+      'footer.copy': 'skill-git by KnowledgeXLab',
+    },
+    zh: {
+      'nav.features': '功能特性', 'nav.commands': '命令',
+      'nav.install': '安装', 'nav.bp': '最佳实践',
+      'hero.title': '专为你的<br><span class="dim">AI Agent 技能</span>设计的 Git',
+      'hero.sub': '追踪变更，回滚错误编辑，合并重复技能 — 支持 Claude、Gemini、Codex 和 OpenClaw。',
+      'hero.cta': '立即开始', 'hero.github': '在 GitHub 上查看',
+      'features.label': '功能特性', 'features.title': '你的技能需要的一切',
+      'features.sub': '告别混乱、碎片化的 Agent 能力管理。',
+      'feat1.title': '版本控制', 'feat1.desc': '每个技能拥有独立的 git 仓库，自动语义化版本标记，完整历史记录永不丢失。',
+      'feat2.title': '安全回滚', 'feat2.desc': '将任意技能回滚到任意历史版本，原子化操作 — 先备份，失败自动恢复。',
+      'feat3.title': '冲突检测', 'feat3.desc': '在问题发生前，审计技能内部的规则冲突、矛盾配置和安全隐患。',
+      'feat4.title': '智能合并', 'feat4.desc': '扫描重叠的技能，合并为一个更强大的统一工具，彻底消除重复。',
+      'feat5.title': '多平台支持', 'feat5.desc': '开箱即用，支持 Claude、OpenClaw、Gemini 和 Codex。',
+      'feat6.title': '便携性', 'feat6.desc': '每个技能文件夹完全自包含，移动或分享时完整历史随行。',
+      'feat7.title': '发现与安装', 'feat7.desc': '通过关键词搜索 SkillHub 和 ClawHub — 一条命令安装，自动检测冲突。',
+      'feat8.title': '库管理', 'feat8.desc': '列出、检查和删除技能，保持技能库精简、有条不紊。',
+      'commands.label': '命令', 'commands.title': '十条命令，完全掌控',
+      'commands.sub': '恰到好处，不多不少。',
+      'cmd.init': '为一个或多个 Agent 的所有技能初始化版本跟踪。',
+      'cmd.commit': '以自动递增的语义化版本标记快照变更，确认后方可写入。',
+      'cmd.revert': '将技能回滚到任意历史版本，未指定版本时默认回到上一个标签。',
+      'cmd.check': '审计技能的规则冲突、矛盾配置和安全问题。',
+      'cmd.scan': '查找语义重叠的技能，每对结果评级并缓存供 merge 使用。',
+      'cmd.merge': '将两个相似技能合并为一个，交互式解决冲突，确认前不写入任何内容。',
+      'cmd.search': '通过关键词或与现有技能的相似度，从 SkillHub 和 ClawHub 发现新技能。',
+      'cmd.install': '一条命令从 SkillHub 或 ClawHub 安装技能，写入前自动检测冲突。',
+      'cmd.list': '列出所有已安装的技能及其当前版本和注册状态。',
+      'cmd.delete': '从磁盘和配置中永久删除技能，存在未提交变更时会发出警告。',
+      'install.label': '安装', 'install.title': '几秒钟即可上手',
+      'install.sub': '选择你的平台，粘贴一条命令即可。',
+      'install.c1': '# 然后初始化', 'install.c2': '# 或指定 Agent', 'install.recommended': '推荐',
+      'bp.label': '最佳实践', 'bp.title': '充分发挥 skill-git 的价值',
+      'bp.sub': '工作流指南与实践建议。',
+      'bp.w0.title': '🔍 发现、安装并对新技能进行版本控制',
+      'bp.w0.desc': '你想添加一个技能，但不确定有哪些选择。',
+      'bp.w0.result': '→ search 按相关度返回 SkillHub 和 ClawHub 的最佳结果。install 将文件放入 ~/.claude/skills/ 并自动标记为 v1.0.0，从第一天起即受版本控制。',
+      'bp.w2.title': '⏪ 编辑技能，保留好的改动，撤销坏的',
+      'bp.w2.desc': '你在调整 <code>planner</code> 技能。有些改动很好，但一周后发现某次更新破坏了工作流。',
+      'bp.w2.result': '→ 每次 commit 记录完整的差异并自动递增版本号。revert 是原子操作 — 先备份，失败时自动恢复。改动永远不会真正消失。',
+      'bp.w3.title': '🔀 合并重叠技能，精简你的技能库',
+      'bp.w3.desc': '随着时间推移，你积累了 <code>code-review</code>、<code>critic</code> 和 <code>pr-feedback</code>，它们开始相互矛盾。',
+      'bp.w3.result': '→ scan 在你决定操作前展示重叠分数。merge 交互式解决冲突 — 确认前不写入任何内容。delete 需要明确确认，若技能有未提交变更会发出警告。',
+      'footer.copy': 'skill-git by KnowledgeXLab',
+    }
+  };
+
+  // ── Apply language ──
+  let lang = localStorage.getItem('sg-lang') || 'en';
+
+  function applyLang(l) {
+    lang = l;
+    localStorage.setItem('sg-lang', l);
+    document.documentElement.lang = l;
+    document.getElementById('lang-toggle').textContent = l === 'en' ? '中文' : 'EN';
+    const t = dict[l];
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.dataset.i18n;
+      if (t[key] !== undefined) el.textContent = t[key];
+    });
+    document.querySelectorAll('[data-i18n-html]').forEach(el => {
+      const key = el.dataset.i18nHtml;
+      if (t[key] !== undefined) el.innerHTML = t[key];
+    });
+  }
+
+  document.getElementById('lang-toggle').addEventListener('click', () => {
+    applyLang(lang === 'en' ? 'zh' : 'en');
+  });
+
+  applyLang(lang);
+
+  // ── Nav scroll ──
+  const nav = document.getElementById('nav');
+  window.addEventListener('scroll', () => nav.classList.toggle('scrolled', window.scrollY > 20));
+
+  // ── Typewriter ──
+  const lines = [
+    { el: document.getElementById('typed-cmd-1'), text: 'claude plugin marketplace add KnowledgeXLab/skill-git' },
+    { el: document.getElementById('typed-cmd-2'), text: 'claude plugin install skill-git@knowledgexlab' },
+  ];
+  function typeLine(lineIdx, charIdx) {
+    const { el, text } = lines[lineIdx];
+    if (charIdx < text.length) {
+      el.textContent += text[charIdx];
+      setTimeout(() => typeLine(lineIdx, charIdx + 1), 38);
+    } else {
+      el.classList.add('done');
+      if (lineIdx + 1 < lines.length) {
+        document.getElementById('cmd-line-2').classList.add('visible');
+        setTimeout(() => typeLine(lineIdx + 1, 0), 200);
+      }
+    }
+  }
+  setTimeout(() => typeLine(0, 0), 600);
+
+  // ── Hero stagger ──
+  document.querySelectorAll('#hero .fade-up').forEach((el, i) => {
+    setTimeout(() => el.classList.add('visible'), 100 + i * 120);
+  });
+
+  // ── Scroll observer ──
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.fade-up:not(#hero .fade-up)').forEach(el => observer.observe(el));
+
+  // ── Tabs ──
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>
