@@ -77,7 +77,7 @@ Set `agent` from the user's response.
 Tell the user:
 
 > `skill-git init` will set up local version tracking for your **<agent>** skills:
-> 1. Scan the agent's skill directories for subfolders (openclaw scans both `~/.openclaw/skills/` and `~/.openclaw/workspace/skills/`)
+> 1. Scan the agent's skill directories for subfolders, including symlinked directories (openclaw scans both `~/.openclaw/skills/` and `~/.openclaw/workspace/skills/`)
 > 2. For each subfolder, run `git init` + initial commit + tag `v1.0.0`
 > 3. Write `~/.skill-git/config.json` to record the agent, base path, and skill versions
 > 4. Create `~/.skill-git/config.local.md` (template) if it does not already exist

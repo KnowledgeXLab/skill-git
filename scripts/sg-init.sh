@@ -181,13 +181,12 @@ for entry in "${TARGET_DIRS[@]}"; do
     echo ""
   fi
 
-  # Scan real subdirs only; skip symlinks (find -type d excludes symlinks to dirs)
+  # Scan real subdirs and symlinks to directories (-L follows symlinks; -type d matches both)
   found=0
   while IFS= read -r -d '' item_dir; do
-    [ -L "$item_dir" ] && continue
     init_item "$item_dir"
     found=1
-  done < <(find "$target_path" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null | sort -z)
+  done < <(find -L "$target_path" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null | sort -z)
 
   if [ "$found" -eq 0 ]; then
     echo "[info] No items found in $target_path"

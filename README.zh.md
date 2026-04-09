@@ -16,8 +16,20 @@
 ### 🌟 核心特性
 
 * 🔀 **合并增强：** 不再堆积重复的微技能。自动扫描本地相似项，合并后让 Agent 更智能、更稳定。
+* 🔍 **发现与安装：** 按关键词搜索 SkillHub 和 ClawHub 注册表，或为本地技能找到最佳在线替代——一条命令完成安装。
 * 📦 **自包含且可移植：** 每个技能文件夹拥有独立的 `.git` 仓库。
 * 🏷️ **语义化版本：** 每次提交自动打标签，技能历史一目了然。
+
+---
+
+## 📅 更新日志
+
+我们保持每周更新节奏，以下是最近的发布：
+
+| 日期 | 版本 | 新功能 |
+|------|------|-------|
+| 2026-04-09 | v1.1 | `search` — 从 SkillHub & ClawHub 搜索技能；`install` — 一键安装并自动处理冲突；`list` — 查看本地技能库 |
+| 2026-03-30 | v1.0 | `init`、`commit`、`revert`、`check`、`scan`、`merge` — 完整的版本控制与合并工作流 |
 
 ---
 
@@ -33,62 +45,65 @@ claude plugin install skill-git@knowledgexlab
 然后运行：
 
 ```bash
-# 1. 初始化所有技能的版本追踪
 /skill-git:init
-
-# 2. 编辑技能后，快照保存变更
-/skill-git:commit
-
-# 3. 扫描技能库中的重叠项
-/skill-git:scan
-
-# 4. 将最佳候选合并为一个更强的技能
-/skill-git:merge
 ```
-
-> 运行一次 `/skill-git:init`，之后每次更新技能都 🔖 `commit`——技能库感觉冗余时就 🔎 `scan` + 🔀 `merge`。
-
-
-
-
-## 🗂️ 典型工作流
-
-### 🚀 从零开始对技能库进行版本管理
-你刚配置好几个技能，想要开始正式追踪。
-```
-/skill-git:init
-/skill-git:commit
-```
-→ 每个技能文件夹获得独立的 `.git` 仓库，打上 `v1.0.0` 标签。之后的变更只需一次 🔖 `commit`。
 
 ---
 
-### 🔖 优化技能后保存新版本
-你改进了 `humanizer` 技能，想要快照这次更新。
-```
-/skill-git:commit humanizer
-```
-→ Agent 分析 diff，推荐 patch 或 minor 版本升级，你确认后写入。例如新标签 `v1.0.2`。
+## 功能一览
+
+| 命令 | 功能说明 |
+|------|---------|
+| 🚀 `init` | 初始化所有技能的版本追踪 |
+| 🔖 `commit` | 快照变更，自动升级语义化版本标签 |
+| ⏪ `revert` | 将技能回滚到任意历史版本 |
+| 🛡️ `check` | 审查技能的规则冲突和安全问题 |
+| 🔎 `scan` | 扫描语义重叠的技能并评级合并候选 |
+| 🔀 `merge` | 将两个相似技能合并为一个更强的技能 |
+| 🔍 `search` | 按关键词或相似度在 SkillHub / ClawHub 上搜索技能 |
+| 📥 `install` | 一条命令从 SkillHub 或 ClawHub 安装技能 |
+| 📋 `list` | 查看所有已安装技能及其当前版本 |
+| 🗑️ `delete` | 从磁盘和配置中永久删除一个技能 |
+
 
 ---
 
-### 🔀 将两个重叠技能合并为一个
-你发现 `code-review` 和 `critic` 功能重复，想要整合。
+
+## 🗂️ 最佳实践
+
+### 1. 🔍 一次会话内完成搜索、安装、版本管理
+你想添加一个代码审查技能，但不确定有哪些选择。
 ```
-/skill-git:scan code-review critic
-/skill-git:merge code-review critic
+/skill-git:search I want to do code review
 ```
-→ 🔎 `scan` 评估重叠度（★★★ / ★★☆ / ★☆☆）。🔀 `merge` 交互式合并——确认前不写入任何内容。
+→ 从 SkillHub 和 ClawHub 返回 Top 5 结果，按相关度和下载量排序。选一个——它会预览内容并询问你确认。
+```
+/skill-git:install clawhub:code-review   # 或你选中的那个
+```
+→ 文件落地到 `~/.claude/skills/code-review/`，自动打上 `v1.0.0` 标签。从第一天起就有版本记录。
 
 ---
 
-### ⏪ 回滚破坏工作流的技能
-你最新的 `planner` 更新引入了冲突，想要撤销。
+### 2. ⏪ 编辑技能，保留好的，撤销坏的
+你调整了 `planner` 技能。一些改动有效，但一周后某次更新破坏了工作流。
 ```
-/skill-git:revert planner
-/skill-git:revert planner v1.0.2
+/skill-git:commit             # 一次好的编辑后 — 打标签 v1.0.1
+/skill-git:commit             # 又一次 — 打标签 v1.0.2
+/skill-git:revert planner     # 出问题了 → 立刻回滚到 v1.0.1
 ```
-→ 回滚到上一版本（或指定标签）。操作前自动备份，失败时自动恢复。
+→ 每次 commit 记录完整 diff 并自动升级版本。revert 是原子操作——先备份，失败自动恢复。没有任何编辑会永久消失。
+
+---
+
+### 3. 🔀 合并重叠技能，精简你的技能库
+你陆续积累了 `code-review`、`critic`、`pr-feedback`，它们开始互相矛盾。
+```
+/skill-git:scan                        # 扫描所有重叠对，评级 ★★★ / ★★☆ / ★☆☆
+/skill-git:merge code-review critic    # 交互式合并得分最高的一对
+/skill-git:commit                      # 快照合并结果，打标签 v1.1.0
+/skill-git:delete critic               # 删除已被吸收的冗余技能
+```
+→ `scan` 在你动手之前就告诉你重叠程度。`merge` 交互式解决冲突，确认前不写入任何内容。`delete` 需要明确确认，若有未提交变更会提前警告。最终是一个更精简的技能库，每个技能都物尽其用。
 
 ---
 
@@ -129,63 +144,6 @@ npx skills add KnowledgeXLab/skill-git -a codex
 /skill-git:init -a codex
 /skill-git:init -a openclaw
 ```
-
----
-
-## 命令一览
-
-| 命令 | 功能说明 |
-|------|---------|
-| 🚀 `init` | 初始化所有技能的版本追踪 |
-| 🔖 `commit` | 快照变更，自动升级语义化版本标签 |
-| ⏪ `revert` | 将技能回滚到任意历史版本 |
-| 🛡️ `check` | 审查技能的规则冲突和安全问题 |
-| 🔎 `scan` | 扫描语义重叠的技能并评级合并候选 |
-| 🔀 `merge` | 将两个相似技能合并为一个更强的技能 |
-
-
-### 🔖 `commit` — 保存新版本
-
-```
-/skill-git:commit
-```
-
-Agent 分析 diff 并推荐 patch 或 minor 升级。确认后写入。
-
-### ⏪ `revert` — 回滚
-
-```
-/skill-git:revert humanizer
-/skill-git:revert humanizer v1.0.2
-```
-
-省略版本号默认回滚到上一标签。操作原子化——先备份，失败自动恢复。
-
-### 🛡️ `check` — 审查技能
-
-```
-/skill-git:check humanizer
-```
-
-检测内部规则冲突、矛盾配置和安全问题，返回结构化报告。
-
-### 🔎 `scan` — 扫描重叠
-
-```
-/skill-git:scan
-/skill-git:scan humanizer code-review
-```
-
-对技能库进行语义分析，找出规则重叠的技能对。每对评级 ★★★ / ★★☆ / ★☆☆，结果缓存供 `merge` 使用。
-
-### 🔀 `merge` — 整合技能
-
-```
-/skill-git:merge
-/skill-git:merge humanizer code-review
-```
-
-无参数运行时使用最新扫描结果。冲突交互式解决，确认前不写入任何内容。
 
 ---
 

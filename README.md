@@ -18,8 +18,21 @@ Track changes, seamlessly roll back bad edits, and—most importantly—**merge 
 ### 🌟 Key Features
 
 * 🔀 **Combine & Conquer:** Stop adding duplicate micro-skills. Automatically scan for local similarities and merge them to make your agent smarter and more robust.
+* 🔍 **Discover & Install:** Search SkillHub and ClawHub registries by keyword, or find online equivalents of your local skills — then install in one command.
 * 📦 **Self-Contained & Portable:** Each skill folder gets its own independent `.git` repository.
 * 🏷️ **Semantic Versioning:** Every commit is auto-tagged, keeping your skill history perfectly organized.
+
+---
+
+## 📅 Changelog
+
+We ship updates weekly. Here's what's new:
+
+| Date | Release | What's new |
+|------|---------|-----------|
+| 2026-04-09 | v1.1 | `search` — discover skills from SkillHub & ClawHub; `install` — one-command install with conflict detection; `list` — view your skill library |
+| 2026-03-30 | v1.0 | `init`, `commit`, `revert`, `check`, `scan`, `merge` — full version control and merge workflow |
+
 
 ---
 
@@ -35,62 +48,65 @@ claude plugin install skill-git@knowledgexlab
 Then run:
 
 ```bash
-# 1. Initialize version tracking for all your skills
 /skill-git:init
-
-# 2. After editing a skill, snapshot the change
-/skill-git:commit
-
-# 3. Find overlapping skills in your library
-/skill-git:scan
-
-# 4. Merge the best candidates into one stronger skill
-/skill-git:merge
 ```
-
-> Run `/skill-git:init` once. Then 🔖 `commit` after every skill update — 🔎 `scan` and 🔀 `merge` whenever your library feels redundant.
-
-
-
-
-## 🗂️ Example Workflows
-
-### 🚀 Version-control your skill library from scratch
-You just set up a few skills and want to start tracking them properly.
-```
-/skill-git:init
-/skill-git:commit
-```
-→ Every skill folder gets its own `.git` repo, tagged `v1.0.0`. Future changes are one 🔖 `commit` away.
 
 ---
 
-### 🔖 Save a new version after improving a skill
-You've refined your `humanizer` skill and want to snapshot the update.
-```
-/skill-git:commit
-```
-→ The agent diffs the changes, recommends a patch or minor bump, and tags the new version (e.g. `v1.0.2`). You confirm before anything is written.
+## Features
+
+| Command | What it does |
+|---------|-------------|
+| 🚀 `init` | Initialize version tracking for all your skills |
+| 🔖 `commit` | Snapshot changes with an auto-bumped semver tag |
+| ⏪ `revert` | Roll back a skill to any previous version |
+| 🛡️ `check` | Audit a skill for rule conflicts and security issues |
+| 🔎 `scan` | Find semantically overlapping skills and rate merge candidates |
+| 🔀 `merge` | Combine two similar skills into one stronger skill |
+| 🔍 `search` | Discover skills from SkillHub and ClawHub by keyword or similarity |
+| 📥 `install` | Install a skill from SkillHub or ClawHub with one command |
+| 📋 `list` | List all installed skills with their current versions |
+| 🗑️ `delete` | Permanently remove a skill from disk and config |
+
 
 ---
 
-### 🔀 Merge two overlapping skills into one
-You notice `code-review` and `critic` feel redundant and want to consolidate.
+
+## 🗂️ Best Practices
+
+### 1. 🔍 Find, install, and version-control a new skill in one session
+You want to add a code-review skill but aren't sure what's out there.
 ```
-/skill-git:scan code-review critic
-/skill-git:merge code-review critic
+/skill-git:search I want to do code review
 ```
-→ 🔎 `scan` rates the overlap (★★★ / ★★☆ / ★☆☆). 🔀 `merge` combines them interactively — nothing is written until you confirm.
+→ Returns the top 5 results from SkillHub and ClawHub, ranked by relevance and download count. Pick one — it installs, previews the content, and asks you to confirm.
+```
+/skill-git:install clawhub:code-review   # or whichever result you picked
+```
+→ Files land in `~/.claude/skills/code-review/` and are tagged `v1.0.0` automatically. You're version-controlled from day one.
 
 ---
 
-### ⏪ Roll back a skill that broke your workflow
-Your latest `planner` update introduced conflicts and you want to undo it.
+### 2. ⏪ Edit a skill, keep what's good, undo what isn't
+You tweak your `planner` skill. Some changes work; one update breaks your workflow a week later.
 ```
-/skill-git:revert planner
-/skill-git:revert planner v1.0.2
+/skill-git:commit             # after a good edit — tags v1.0.1
+/skill-git:commit             # after another — tags v1.0.2
+/skill-git:revert planner     # something broke → rolls back to v1.0.1 instantly
 ```
-→ Reverts to the previous version (or a specific tag). A backup is taken first and restored automatically if anything fails.
+→ Each commit captures the full diff and bumps the version. Revert is atomic — a backup is taken first and restored automatically if anything fails. No edit is ever truly gone.
+
+---
+
+### 3. 🔀 Shrink your library by merging what overlaps
+Over time you accumulated `code-review`, `critic`, and `pr-feedback`. They've started contradicting each other.
+```
+/skill-git:scan                        # finds all overlapping pairs, rated ★★★ / ★★☆ / ★☆☆
+/skill-git:merge code-review critic    # combines the top pair interactively
+/skill-git:commit                      # snapshots the merged result as v1.1.0
+/skill-git:delete critic               # remove the now-redundant original
+```
+→ `scan` shows you the overlap score before you commit to anything. `merge` resolves conflicts interactively — nothing is written until you confirm. `delete` asks for explicit confirmation and warns you if the skill has uncommitted changes. The result is a leaner library where every skill pulls its weight.
 
 ---
 
@@ -134,63 +150,6 @@ Supports multiple agents via `-a <agent>`:
 
 ---
 
-## Usage
-
-| Command | What it does |
-|---------|-------------|
-| 🚀 `init` | Initialize version tracking for all your skills |
-| 🔖 `commit` | Snapshot changes with an auto-bumped semver tag |
-| ⏪ `revert` | Roll back a skill to any previous version |
-| 🛡️ `check` | Audit a skill for rule conflicts and security issues |
-| 🔎 `scan` | Find semantically overlapping skills and rate merge candidates |
-| 🔀 `merge` | Combine two similar skills into one stronger skill |
-
-
-### 🔖 `commit` — Save a new version
-
-```
-/skill-git:commit
-```
-
-The agent analyzes the diff and recommends a patch or minor bump. You confirm before anything is written.
-
-### ⏪ `revert` — Roll back
-
-```
-/skill-git:revert humanizer
-/skill-git:revert humanizer v1.0.2
-```
-
-Omitting the version defaults to the previous tag. The operation is atomic — a backup is taken first and restored automatically if anything fails.
-
-### 🛡️ `check` — Audit a skill
-
-```
-/skill-git:check humanizer
-```
-
-Detects internal rule conflicts, contradictory configs, and security issues. Returns a structured report.
-
-### 🔎 `scan` — Find overlap
-
-```
-/skill-git:scan
-/skill-git:scan humanizer code-review
-```
-
-Runs semantic analysis across your skills to find pairs with overlapping rules. Each pair is rated ★★★ / ★★☆ / ★☆☆ and results are cached for `merge` to pick up.
-
-### 🔀 `merge` — Consolidate skills
-
-```
-/skill-git:merge
-/skill-git:merge humanizer code-review
-```
-
-Running without arguments picks up the latest scan results. Conflicts are resolved interactively. Nothing is written until you confirm.
-
----
-
 ## How it works
 
 ```
@@ -216,6 +175,7 @@ Each skill's `.git` is fully independent — moving or sharing a skill folder pr
 ```bash
 claude --plugin-dir ./
 ```
+
 
 ---
 
